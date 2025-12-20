@@ -1,6 +1,10 @@
 # ==============================================================================
 # SCRIPT: Generate-Restore-Scripts.ps1
 # ==============================================================================
+param(
+    [string]$InputFile = ""
+)
+
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent $ScriptDir
 $configPath = "$RootDir\config.json"
@@ -8,7 +12,14 @@ $config = Get-Content $configPath -Raw | ConvertFrom-Json
 
 $invDir = "$RootDir\$($config.InventoryDirectory)"
 $installDir = "$RootDir\$($config.InstallersDirectory)"
-$csvPath  = "$invDir\$($config.InstallInputCSV)"
+
+# Use provided InputFile or default to config location
+if ([string]::IsNullOrWhiteSpace($InputFile)) {
+    $csvPath = "$invDir\$($config.InventoryInputCSV)"
+} else {
+    $csvPath = $InputFile
+}
+
 $winScriptPath = "$installDir\Restore_Windows.ps1"
 $linuxScriptPath = "$installDir\Restore_Linux.sh"
 

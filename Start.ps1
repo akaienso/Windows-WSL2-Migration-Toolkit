@@ -15,8 +15,8 @@ $defaultConfig = @{
     LogDirectory        = "Logs"
     ExternalBackupRoot  = "D:\Migration-Backups"
     WslDistroName       = "Ubuntu"
-    InventoryOutputCSV  = "INSTALLED_SOFTWARE_INVENTORY.csv"
-    InstallInputCSV     = "SOFTWARE-INSTALLATION-INVENTORY.csv"
+    InventoryOutputCSV  = "INSTALLED-SOFTWARE-INVENTORY.csv"
+    InventoryInputCSV   = "SOFTWARE-INSTALLATION-INVENTORY.csv"
 }
 
 # --- LOAD / CREATE CONFIG ---
@@ -81,16 +81,58 @@ do {
         "1" { 
             Clear-Host; $target = "$scriptPath\Get-Inventory.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
+            Write-Host "`n✓ Inventory complete! Next steps:" -ForegroundColor Green
+            Write-Host "  1. Go to Inventories/ folder" -ForegroundColor Cyan
+            Write-Host "  2. Copy 'INSTALLED-SOFTWARE-INVENTORY.csv'" -ForegroundColor Cyan
+            Write-Host "     → 'SOFTWARE-INSTALLATION-INVENTORY.csv'" -ForegroundColor Cyan
+            Write-Host "  3. Edit with Google Sheets (recommended, see README)" -ForegroundColor Cyan
+            Write-Host "  4. Set 'Keep' to TRUE for packages to restore" -ForegroundColor Cyan
+            Write-Host "  5. Save and return to this menu → Option 2" -ForegroundColor Cyan
             Pause
         }
         "2" { 
             Clear-Host; $target = "$scriptPath\Generate-Restore-Scripts.ps1"
-            $inputFile = "$PSScriptRoot\$($currentConfig.InventoryDirectory)\$($currentConfig.InstallInputCSV)"
+            $inputFile = "$PSScriptRoot\$($currentConfig.InventoryDirectory)\$($currentConfig.InventoryInputCSV)"
+            
+            # Check if default file exists
             if (-not (Test-Path $inputFile)) {
-                Write-Warning "Input file not found: $inputFile"
-            } else {
-                if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
+                Write-Host "`n⚠ INPUT FILE NOT FOUND" -ForegroundColor Yellow
+                Write-Host "Expected: $inputFile" -ForegroundColor Red
+                Write-Host "`nOptions:" -ForegroundColor Cyan
+                Write-Host "  1. Run Option 1 to generate INSTALLED-SOFTWARE-INVENTORY.csv" -ForegroundColor White
+                Write-Host "  2. Copy to SOFTWARE-INSTALLATION-INVENTORY.csv and edit" -ForegroundColor White
+                Write-Host "  3. Provide path to your inventory file" -ForegroundColor White
+                Write-Host "  4. Exit and try again later" -ForegroundColor White
+                $choice = Read-Host "`nEnter option (1/2/3/4)"
+                
+                if ($choice -eq "3") {
+                    $customPath = Read-Host "Enter full path to your inventory CSV file"
+                    if (Test-Path $customPath) {
+                        $inputFile = $customPath
+                        Write-Host "✓ File found: $inputFile" -ForegroundColor Green
+                    } else {
+                        Write-Host "✗ File not found at: $customPath" -ForegroundColor Red
+                        Write-Host "Please check the path and try again." -ForegroundColor Yellow
+                        Pause
+                        return
+                    }
+                } else {
+                    Write-Host "Returning to menu..." -ForegroundColor Yellow
+                    Pause
+                    return
+                }
             }
+            
+            # Run script with the inputFile path
+            if (Test-Path $target) { 
+                & $target -InputFile $inputFile
+            } else { 
+                Write-Error "Missing: $target" 
+            }
+            Write-Host "`n✓ Restore scripts generated! Next steps:" -ForegroundColor Green
+            Write-Host "  1. Review Installers/Restore_Windows.ps1 and Restore_Linux.sh" -ForegroundColor Cyan
+            Write-Host "  2. For Windows: Run 'Run-Restore-Admin.bat'" -ForegroundColor Cyan
+            Write-Host "  3. For WSL: Manual execution or use Option 4 for full restoration" -ForegroundColor Cyan
             Pause
         }
         "3" {
@@ -103,7 +145,7 @@ do {
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Pause
         }
-        "Q" { break }
-        "q" { break }
+        "Q" { exit }
+        "q" { exit }
     }
 } while ($true)
