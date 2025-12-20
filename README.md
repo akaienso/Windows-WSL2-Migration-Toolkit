@@ -1,92 +1,55 @@
 # 🔄 Windows & WSL2 Migration Toolkit
 
 > **A complete "Wipe & Restore" solution for power users.**
-> Automatically inventory your Windows and Ubuntu (WSL2) applications, filter out system noise, and generate "One-Click" restore scripts for your fresh install.
+> Inventory apps, generate restore scripts, and perform full WSL distro backups.
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207-blue) ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20WSL2-lightgrey) ![License](https://img.shields.io/badge/License-MIT-green)
 
-## 🚀 The Problem
-Reformatting Windows is easy. Remembering exactly which 100+ utilities, CLI tools, and libraries you had installed—and re-installing them one by one—is a nightmare.
-
-## 🛠 What This Toolkit Does
-1.  **Unified Inventory:** Scans **Winget**, **Microsoft Store**, **Registry** (legacy apps), and **WSL2 (Ubuntu)** in a single pass.
-2.  **Smart Filtering:** Automatically filters out "noise" (C++ Redistributables, Drivers, Linux Base System libs) so you see only *User-Installed Apps*.
-3.  **Google Sheets Ready:** Outputs a CSV pre-formatted for Google Sheets with boolean checkboxes.
-4.  **Restore Generator:** Reads your selected apps and auto-generates:
-    * `Restore_Windows.ps1` (for Winget/Store)
-    * `Restore_Linux.sh` (for Apt)
-
----
-
-## 📦 Installation
-
-1.  Clone this repository.
-2.  Open PowerShell as Administrator.
-3.  Run the main menu:
-    ```powershell
-    .\Start.ps1
-    ```
-    *(Note: On first run, it will auto-generate the folders `/Inventories`, `/Installers`, `/Logs`, and a `config.json` file.)*
+## 🚀 Features
+1.  **App Inventory:** Scans Winget, Store, Registry, and WSL packages.
+2.  **Restore Generator:** Creates "One-Click" restore scripts for Windows & Linux apps.
+3.  **Full WSL Backup:** Exports your entire WSL distro (filesystem + dotfiles) to an external drive or cloud storage with integrity hashes.
+4.  **WSL Restore:** Imports your distro backup and automatically "self-heals" scripts and dotfiles.
 
 ---
 
 ## 📖 Usage Workflow
 
-### Step 1: Scan Your Current Environment
-1.  Launch `Start.ps1`.
-2.  Select **Option 1: Generate Application Inventory**.
-3.  The script will scan all environments and save the CSV to the `/Inventories` folder.
+### 1. App Inventory (Soft Backup)
+1.  Run Start.ps1 -> Option 1.
+2.  Edit the CSV in /Inventories (check the "Keep" box).
+3.  Run Start.ps1 -> Option 2 to generate restore scripts.
 
-### Step 2: Select What to Keep
-1.  Upload the CSV to **Google Drive** and open it with **Google Sheets**.
-2.  Highlight the **"Keep (Y/N)"** column.
-3.  Click **Insert > Checkbox**.
-    * *The script pre-fills this column with `FALSE`, so they instantly become unchecked boxes.*
-4.  Check the box next to every app you want to restore.
-5.  **Export** the sheet as `SOFTWARE-INSTALLATION-INVENTORY.csv` (CSV format) and save it to the `/Inventories` folder.
+### 2. Full WSL System Backup (Hard Backup)
+1.  Run Start.ps1 -> Option 3 (Backup WSL Environment).
+2.  This will:
+    * Inject backup helpers into WSL.
+    * Export your .bashrc, .ssh, etc.
+    * Export the full distro image to your configured Backup path (Default: D:\WSL-Backups).
+    * Verify SHA-256 hashes.
 
-### Step 3: Generate Installers
-1.  Launch `Start.ps1`.
-2.  Select **Option 2: Generate Installation Scripts**.
-3.  The toolkit reads your selection and creates two files in the `/Installers` folder:
-    * `Restore_Windows.ps1`
-    * `Restore_Linux.sh`
-
-### Step 4: The Fresh Start
-After wiping your machine and reinstalling the toolkit:
-1.  **Windows:** Run the bootstrap file `Run-Restore-Admin.bat` (located in the root). It will auto-elevate permissions and run your restore script.
-2.  **Linux:** Open WSL, go to the `/Installers` folder, and run `bash Restore_Linux.sh`.
+### 3. The Fresh Start (Restore)
+1.  **Windows Apps:** Run Run-Restore-Admin.bat.
+2.  **WSL Distro:** Run Start.ps1 -> Option 4 (Restore WSL Environment).
+    * This imports your distro from the external drive.
+    * Automatically fixes SSH permissions.
+    * Reinstalls core dev tools.
 
 ---
 
 ## ⚙️ Configuration
-The tool manages paths via `config.json`. You can edit this file manually or allow the script to regenerate defaults.
+The config.json file handles paths.
 
 ```json
 {
-    "BasePath": ".", 
+    "WslDistroName": "Ubuntu",
+    "WslBackupDirectory": "D:\\WSL-Backups",
     "InventoryDirectory": "Inventories",
-    "InstallersDirectory": "Installers",
-    "ScriptDirectory": "Scripts",
-    "LogDirectory": "Logs"
+    "InstallersDirectory": "Installers"
 }
 ```
 
-## 🛡 Features
-
-- Winget First Strategy: If an app is found in both Winget and the Registry, the script prioritizes the Winget ID for cleaner restoration.
-- Manual Install Detection: If you select a "Legacy/Registry" app that cannot be installed via CLI, the restore script adds a "Manual Attention Required" reminder at the end of the installation process.
-- Smart Noise Filter:
-
-    - Windows: Hides "KB Updates", "Intel/Nvidia Drivers", ".NET Frameworks", etc.
-    - Linux: Hides "lib*", "python3-minimal", "coreutils", etc.
-
 ## 👨‍💻 Author
-*Rob Moore*
-
-🌐 [rmoore.dev](https://rmoore.dev) 
-📧 [io@rmoore.dev](mailto:io@rmoore.dev)
-🐙 [@akaienso](https://github.com/akaienso)
-
-## 📄 License
-MIT License. Free to use, modify, and distribute. '@ $content | Out-File -FilePath "$baseDir\README.md" -Encoding UTF8
+**Rob Moore**
+* 🌐 [rmoore.dev](https://rmoore.dev)
+* 📧 [io@rmoore.dev](mailto:io@rmoore.dev)

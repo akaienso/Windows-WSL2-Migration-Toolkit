@@ -1,7 +1,5 @@
 # ==============================================================================
 # SCRIPT: Start.ps1 (System Migration Toolkit - Main Menu)
-# AUTHOR: Rob Moore <io@rmoore.dev>
-# LICENSE: MIT
 # ==============================================================================
 
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -15,6 +13,8 @@ $defaultConfig = @{
     InventoryDirectory  = "Inventories"
     InstallersDirectory = "Installers"
     LogDirectory        = "Logs"
+    WslBackupDirectory  = "D:\WSL-Backups"
+    WslDistroName       = "Ubuntu"
     InventoryOutputCSV  = "INSTALLED_SOFTWARE_INVENTORY.csv"
     InstallInputCSV     = "SOFTWARE-INSTALLATION-INVENTORY.csv"
 }
@@ -23,7 +23,6 @@ $defaultConfig = @{
 function Load-Config {
     if (Test-Path $configPath) {
         $loaded = Get-Content $configPath -Raw | ConvertFrom-Json
-        # Add missing keys if upgrading from older version
         foreach ($key in $defaultConfig.Keys) {
             if (-not $loaded.PSObject.Properties[$key]) {
                 $loaded | Add-Member -NotePropertyName $key -NotePropertyValue $defaultConfig[$key]
@@ -61,14 +60,20 @@ function Show-Menu {
     Write-Host "      SYSTEM MIGRATION TOOLKIT" -ForegroundColor Cyan
     Write-Host "========================================================" -ForegroundColor Cyan
     Write-Host "  Scripts:   \$($currentConfig.ScriptDirectory)" -ForegroundColor DarkGray
-    Write-Host "  Data:      \$($currentConfig.InventoryDirectory)" -ForegroundColor DarkGray
-    Write-Host "  Output:    \$($currentConfig.InstallersDirectory)" -ForegroundColor Green
+    Write-Host "  Backups:   $($currentConfig.WslBackupDirectory)" -ForegroundColor DarkGray
+    Write-Host "  WSL Distro:$($currentConfig.WslDistroName)" -ForegroundColor DarkGray
     Write-Host "--------------------------------------------------------" -ForegroundColor Cyan
     Write-Host "1. Generate Application Inventory" -ForegroundColor Yellow
-    Write-Host "   (Scans Windows & WSL -> Creates CSV in Inventories/)"
+    Write-Host "   (Scans Windows & WSL -> Creates CSV)"
     Write-Host ""
     Write-Host "2. Generate Installation Scripts" -ForegroundColor Yellow
-    Write-Host "   (Reads Checkbox CSV -> Creates Installers in Installers/)"
+    Write-Host "   (Reads CSV -> Creates Installers)"
+    Write-Host ""
+    Write-Host "3. Backup WSL Environment" -ForegroundColor Magenta
+    Write-Host "   (Full Export + Dotfiles -> External Drive)"
+    Write-Host ""
+    Write-Host "4. Restore WSL Environment" -ForegroundColor Magenta
+    Write-Host "   (Import Distro + Fix Permissions)"
     Write-Host ""
     Write-Host "Q. Quit" -ForegroundColor White
     Write-Host "========================================================" -ForegroundColor Cyan
@@ -83,31 +88,30 @@ do {
 
     switch ($choice) {
         "1" { 
-            Clear-Host
-            $target = "$scriptPath\Get-Inventory.ps1"
-            if (Test-Path $target) { & $target } 
-            else { Write-Error "Missing script: $target" }
+            Clear-Host; $target = "$scriptPath\Get-Inventory.ps1"
+            if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Pause
         }
-
         "2" { 
-            Clear-Host
-            $target = "$scriptPath\Generate-Restore-Scripts.ps1"
-            
-            # Check for input file in Inventories folder
-            $invPath = "$PSScriptRoot\$($currentConfig.InventoryDirectory)"
-            $inputFile = "$invPath\$($currentConfig.InstallInputCSV)"
-            
+            Clear-Host; $target = "$scriptPath\Generate-Restore-Scripts.ps1"
+            $inputFile = "$PSScriptRoot\$($currentConfig.InventoryDirectory)\$($currentConfig.InstallInputCSV)"
             if (-not (Test-Path $inputFile)) {
-                Write-Warning "Cannot find input file: $inputFile"
-                Write-Warning "Please save your Google Sheet export to the '$($currentConfig.InventoryDirectory)' folder."
+                Write-Warning "Input file not found: $inputFile"
             } else {
-                if (Test-Path $target) { & $target } 
-                else { Write-Error "Missing script: $target" }
+                if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             }
             Pause
         }
-
+        "3" {
+            Clear-Host; $target = "$scriptPath\Backup-WSL.ps1"
+            if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
+            Pause
+        }
+        "4" {
+            Clear-Host; $target = "$scriptPath\Restore-WSL.ps1"
+            if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
+            Pause
+        }
         "Q" { break }
         "q" { break }
     }

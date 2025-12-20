@@ -1,16 +1,19 @@
-# Configuration (Users generate their own)
+# Configuration
 config.json
 
-# Directories generated at runtime
+# Runtime Data
 Logs/
 Inventories/
 Installers/
+Backups/
 
 # Editor Settings
 .vscode/
 .cursor/
 
-# Legacy Files (just in case)
+# Legacy
 *.log
 *.txt
 *.csv
+*.tar
+*.tar.gz
