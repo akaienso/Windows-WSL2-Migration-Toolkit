@@ -38,12 +38,14 @@
 ## ⚙️ Configuration
 The config.json file handles paths.
 
+```json
 {
     "ExternalBackupRoot": "D:\\Migration-Backups",
     "WslDistroName": "Ubuntu",
     "InventoryDirectory": "Inventories",
     "InstallersDirectory": "Installers"
 }
+```
 
 * **ExternalBackupRoot**: Where heavy backup files (like WSL images) are stored.
 * **InventoryDirectory**: Where lightweight CSVs are stored locally.
