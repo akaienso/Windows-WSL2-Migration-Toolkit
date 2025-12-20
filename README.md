@@ -1,53 +1,52 @@
 # 🔄 Windows & WSL2 Migration Toolkit
 
 > **A complete "Wipe & Restore" solution for power users.**
-> Inventory apps, generate restore scripts, and perform full WSL distro backups.
+> Inventory Windows apps, backup WSL environments, and generate "One-Click" restore scripts.
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207-blue) ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20WSL2-lightgrey) ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## 🚀 Features
-1.  **App Inventory:** Scans Winget, Store, Registry, and WSL packages.
-2.  **Restore Generator:** Creates "One-Click" restore scripts for Windows & Linux apps.
-3.  **Full WSL Backup:** Exports your entire WSL distro (filesystem + dotfiles) to an external drive or cloud storage with integrity hashes.
-4.  **WSL Restore:** Imports your distro backup and automatically "self-heals" scripts and dotfiles.
+1.  **Windows App Inventory:** Scans Winget, Store, and Registry to build a complete list of your installed software.
+2.  **Restore Generator:** Creates an automated PowerShell script to re-install your Windows apps.
+3.  **WSL System Backup:** Exports your full Linux distro (Ubuntu/Debian) to an external drive.
+4.  **WSL Restore:** Imports your distro backup and automatically fixes permissions and dotfiles.
 
 ---
 
 ## 📖 Usage Workflow
 
-### 1. App Inventory (Soft Backup)
+### Part 1: Windows Applications (Inventory & Restore)
 1.  Run Start.ps1 -> Option 1.
-2.  Edit the CSV in /Inventories (check the "Keep" box).
-3.  Run Start.ps1 -> Option 2 to generate restore scripts.
+    * Scans your system.
+    * Saves CSV to /Inventories/INSTALLED_SOFTWARE_INVENTORY.csv.
+2.  Edit the CSV (Set "Keep" to TRUE for apps you want).
+3.  Run Start.ps1 -> Option 2.
+    * Generates /Installers/Restore_Windows.ps1.
 
-### 2. Full WSL System Backup (Hard Backup)
-1.  Run Start.ps1 -> Option 3 (Backup WSL Environment).
-2.  This will:
-    * Inject backup helpers into WSL.
-    * Export your .bashrc, .ssh, etc.
-    * Export the full distro image to your configured Backup path (Default: D:\WSL-Backups).
-    * Verify SHA-256 hashes.
+### Part 2: WSL Environment (Full Backup)
+1.  Run Start.ps1 -> Option 3.
+    * Injects backup helpers into WSL.
+    * Exports the full distro image to your External Backup Root (Default: D:\Migration-Backups\WSL).
+    * Verifies integrity hashes.
 
-### 3. The Fresh Start (Restore)
-1.  **Windows Apps:** Run Run-Restore-Admin.bat.
-2.  **WSL Distro:** Run Start.ps1 -> Option 4 (Restore WSL Environment).
-    * This imports your distro from the external drive.
-    * Automatically fixes SSH permissions.
-    * Reinstalls core dev tools.
+### Part 3: The Fresh Start
+1.  **Windows Apps:** Run Run-Restore-Admin.bat (in the root folder).
+2.  **WSL Distro:** Run Start.ps1 -> Option 4.
 
 ---
 
 ## ⚙️ Configuration
 The config.json file handles paths.
 
-```json
 {
+    "ExternalBackupRoot": "D:\\Migration-Backups",
     "WslDistroName": "Ubuntu",
-    "WslBackupDirectory": "D:\\WSL-Backups",
     "InventoryDirectory": "Inventories",
     "InstallersDirectory": "Installers"
 }
-```
+
+* **ExternalBackupRoot**: Where heavy backup files (like WSL images) are stored.
+* **InventoryDirectory**: Where lightweight CSVs are stored locally.
 
 ## 👨‍💻 Author
 **Rob Moore**

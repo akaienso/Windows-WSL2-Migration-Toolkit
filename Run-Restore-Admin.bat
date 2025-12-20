@@ -1,7 +1,7 @@
 @echo off
 :: ============================================================
 :: BOOTSTRAP LOADER
-:: Automatically elevates to Admin and runs the Restore Script
+:: Automatically elevates to Admin and runs the Windows Restore Script
 :: ============================================================
 
 NET SESSION >nul 2>&1

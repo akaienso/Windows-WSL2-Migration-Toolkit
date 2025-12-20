@@ -19,7 +19,7 @@ if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Force -Path $logDi
 $timestamp = Get-Date -Format "yyyyMMdd_HHmm"
 Start-Transcript -Path "$logDir\Inventory_Log_$timestamp.txt" -Append | Out-Null
 
-Write-Host "`n=== STARTING INVENTORY SCAN ===" -ForegroundColor Cyan
+Write-Host "`n=== STARTING APP INVENTORY SCAN ===" -ForegroundColor Cyan
 
 # STEP 0: SYSTEM INFO
 Write-Host "0. Capturing System Identity..." -NoNewline -ForegroundColor Yellow
@@ -88,8 +88,8 @@ foreach ($loc in $registryLocations) {
 }
 Write-Host "Done." -ForegroundColor Green
 
-# STEP 4: WSL2
-Write-Host "4. Connecting to WSL2... " -NoNewline -ForegroundColor Yellow
+# STEP 4: WSL2 (App Inventory Only)
+Write-Host "4. Inventorying WSL2 Packages... " -NoNewline -ForegroundColor Yellow
 try {
     $wslOutput = wsl --exec apt-mark showmanual 2>&1
     if ($LASTEXITCODE -ne 0) { throw "WSL Error" }
@@ -111,4 +111,4 @@ Write-Host "Done." -ForegroundColor Green
 
 if (Test-Path $wingetJsonPath) { Remove-Item $wingetJsonPath -Force -ErrorAction SilentlyContinue }
 Stop-Transcript | Out-Null
-Write-Host "`nSUCCESS! File saved to: $csvPath" -ForegroundColor Green
+Write-Host "`nSUCCESS! Inventory saved to: $csvPath" -ForegroundColor Green

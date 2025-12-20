@@ -1,6 +1,6 @@
 # ==============================================================================
 # SCRIPT: Restore-WSL.ps1
-# PURPOSE: Imports WSL Distro + Restores Dotfiles
+# PURPOSE: Imports Full WSL Distro from External Drive
 # ==============================================================================
 $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -8,11 +8,12 @@ $RootDir = Split-Path -Parent $ScriptDir
 $config = Get-Content "$RootDir\config.json" -Raw | ConvertFrom-Json
 
 $Distro = $config.WslDistroName
-$BackupDir = $config.WslBackupDirectory
+# Look in the WSL subfolder
+$BackupDir = Join-Path $config.ExternalBackupRoot "WSL"
 $InstallLocation = "C:\WSL\$Distro"
 $WslScriptsDir = "$RootDir\Scripts\WSL"
 
-Write-Host "`n=== WSL MIGRATION RESTORE ===" -ForegroundColor Cyan
+Write-Host "`n=== WSL SYSTEM RESTORE ===" -ForegroundColor Cyan
 Write-Host "Source: $BackupDir"
 Write-Host "Dest:   $InstallLocation"
 

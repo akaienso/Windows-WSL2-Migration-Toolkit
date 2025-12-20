@@ -53,7 +53,6 @@ sudo apt update && sudo apt upgrade -y
 "@
 foreach ($cmd in $linuxCommands) { $linuxContent += "`necho 'Installing: $cmd'`nsudo $cmd" }
 $linuxContent += "`n`necho 'Done!'"
-# Ensure Unix Line Endings
 $linuxContent = $linuxContent -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText($linuxScriptPath, $linuxContent)
 

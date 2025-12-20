@@ -13,7 +13,7 @@ $defaultConfig = @{
     InventoryDirectory  = "Inventories"
     InstallersDirectory = "Installers"
     LogDirectory        = "Logs"
-    WslBackupDirectory  = "D:\WSL-Backups"
+    ExternalBackupRoot  = "D:\Migration-Backups"
     WslDistroName       = "Ubuntu"
     InventoryOutputCSV  = "INSTALLED_SOFTWARE_INVENTORY.csv"
     InstallInputCSV     = "SOFTWARE-INSTALLATION-INVENTORY.csv"
@@ -59,22 +59,13 @@ function Show-Menu {
     Write-Host "========================================================" -ForegroundColor Cyan
     Write-Host "      SYSTEM MIGRATION TOOLKIT" -ForegroundColor Cyan
     Write-Host "========================================================" -ForegroundColor Cyan
-    Write-Host "  Scripts:   \$($currentConfig.ScriptDirectory)" -ForegroundColor DarkGray
-    Write-Host "  Backups:   $($currentConfig.WslBackupDirectory)" -ForegroundColor DarkGray
-    Write-Host "  WSL Distro:$($currentConfig.WslDistroName)" -ForegroundColor DarkGray
+    Write-Host "  Scripts:    \$($currentConfig.ScriptDirectory)" -ForegroundColor DarkGray
+    Write-Host "  Ext Backup: $($currentConfig.ExternalBackupRoot)" -ForegroundColor DarkGray
     Write-Host "--------------------------------------------------------" -ForegroundColor Cyan
-    Write-Host "1. Generate Application Inventory" -ForegroundColor Yellow
-    Write-Host "   (Scans Windows & WSL -> Creates CSV)"
-    Write-Host ""
+    Write-Host "1. Generate Application Inventory (Windows + WSL Apps)" -ForegroundColor Yellow
     Write-Host "2. Generate Installation Scripts" -ForegroundColor Yellow
-    Write-Host "   (Reads CSV -> Creates Installers)"
-    Write-Host ""
-    Write-Host "3. Backup WSL Environment" -ForegroundColor Magenta
-    Write-Host "   (Full Export + Dotfiles -> External Drive)"
-    Write-Host ""
-    Write-Host "4. Restore WSL Environment" -ForegroundColor Magenta
-    Write-Host "   (Import Distro + Fix Permissions)"
-    Write-Host ""
+    Write-Host "3. Backup WSL System (Full Distro Export)" -ForegroundColor Magenta
+    Write-Host "4. Restore WSL System" -ForegroundColor Magenta
     Write-Host "Q. Quit" -ForegroundColor White
     Write-Host "========================================================" -ForegroundColor Cyan
 }

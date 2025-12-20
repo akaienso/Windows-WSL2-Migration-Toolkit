@@ -5,13 +5,12 @@ config.json
 Logs/
 Inventories/
 Installers/
-Backups/
 
 # Editor Settings
 .vscode/
 .cursor/
 
-# Legacy
+# Legacy/Temporary
 *.log
 *.txt
 *.csv
