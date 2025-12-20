@@ -86,19 +86,21 @@ After running **Option 1 (Get-Inventory)**, you'll have `INSTALLED-SOFTWARE-INVE
 ---
 
 ## ⚙️ Configuration
-The config.json file handles paths.
+The config.json file handles paths and settings.
 
 ```json
 {
-    "ExternalBackupRoot": "D:\\Migration-Backups",
+    "ExternalBackupRoot": "",
     "WslDistroName": "Ubuntu",
     "InventoryDirectory": "Inventories",
     "InstallersDirectory": "Installers"
 }
 ```
 
-* **ExternalBackupRoot**: Where heavy backup files (like WSL images) are stored.
+* **ExternalBackupRoot**: Where heavy backup files (like WSL images) are stored. **Leave empty on first run**—you'll be prompted to set this location. If you don't provide one, it defaults to `./migration-backups` (relative to the toolkit folder).
+* **WslDistroName**: The name of your WSL distro (default: Ubuntu).
 * **InventoryDirectory**: Where lightweight CSVs are stored locally.
+* **InstallersDirectory**: Where generated restore scripts are saved.
 
 ## 👨‍💻 Author
 **Rob Moore**

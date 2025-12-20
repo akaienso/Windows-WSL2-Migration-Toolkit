@@ -14,7 +14,8 @@ This is a **system migration automation tool** for Windows users with WSL2. It o
 - Single source of truth for paths and distro name
 - Used by all scripts via `Get-Content | ConvertFrom-Json`
 - Default values embedded in `Start.ps1` (fallback mechanism)
-- **Key fields**: `ExternalBackupRoot`, `WslDistroName`, `InventoryDirectory`, `InstallersDirectory`, `LogDirectory`, `InventoryOutputCSV`, `InventoryInputCSV`
+- **Key fields**: `ExternalBackupRoot` (prompted on first backup), `WslDistroName`, `InventoryDirectory`, `InstallersDirectory`, `LogDirectory`, `InventoryOutputCSV`, `InventoryInputCSV`
+- **ExternalBackupRoot**: Initially empty; user is prompted on first run with default of `./migration-backups` (relative to script root)
 
 ### Four-Step User Workflow
 ```
