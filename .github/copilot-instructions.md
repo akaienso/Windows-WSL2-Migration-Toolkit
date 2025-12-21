@@ -117,10 +117,13 @@ Start.ps1 (Main Menu)
 - **Line endings**: All `.sh` files must use `\n` (LF), not `\r\n`
 
 ### CSV Conventions
-- **Input file**: `SOFTWARE-INSTALLATION-INVENTORY.csv` (user-edited)
-- **Output file**: `INSTALLED_SOFTWARE_INVENTORY.csv` (system-generated, not edited)
-- Boolean column: `Keep (Y/N)` accepts loose matching: `"TRUE|Yes|Y|1"` (case-insensitive via `-match`)
-- Restoration Command: Includes full command (e.g., `winget install --id foo -e`), not just package name
+- **Two-file pattern**: 
+  - `INSTALLED-SOFTWARE-INVENTORY.csv` = read-only system output (regenerable by Get-Inventory)
+  - `SOFTWARE-INSTALLATION-INVENTORY.csv` = user-editable copy (input to Generate-Restore-Scripts)
+  - This prevents accidental overwrites of user edits
+- **Boolean column**: `Keep (Y/N)` accepts loose matching: `"TRUE|Yes|Y|1"` (case-insensitive via `-match`)
+- **Restoration Command**: Full command stored (e.g., `winget install --id foo -e`), not just package ID
+- **Deduplication**: Tracked via `$knownApps` hashtable to prevent duplicates across sources
 
 ### Directory Structure
 ```
@@ -168,11 +171,14 @@ $wslPath = "/mnt/" + ($BackupDir.Replace(":", "").Replace("\", "/").ToLower())
 ```
 
 ### Edge Cases & Debugging
-- **WSL not installed**: Scripts fail silently on `wsl --exec` (catch blocks suppress errors)
-- **Path encoding**: `Replace(":", "").Replace("\", "/").ToLower()` handles drive letters
-- **Dotfile restore permissions**: `post-restore-install.sh` handles `chown` if needed
-- **Distro already exists**: Restore warns but proceeds (old install gets overwritten)
-- **Registry apps**: Marked "Source: Registry (Manual)" because no uninstall command available
+- **WSL not installed**: Scripts fail silently on `wsl --exec` (catch blocks suppress errors); verify with `wsl --list --verbose`
+- **Path encoding**: `Replace(":", "").Replace("\", "/").ToLower()` handles drive letters (C: → c)
+- **Dotfile restore permissions**: `post-restore-install.sh` handles `chown` if needed after extraction
+- **Distro already exists**: Restore warns but proceeds (old install gets overwritten); use `wsl --unregister DISTRO` to remove first
+- **Registry apps**: Marked "Source: Registry (Manual)" because no uninstall command available; must install manually
+- **CSV encoding**: Use UTF-8 without BOM; avoid Excel (converts line endings to CRLF)
+- **Transcript logging**: Check `Logs/Inventory_Log_*.txt` for detailed Get-Inventory output when debugging inventory issues
+- **Hash verification**: Check `migration-backups/WSL/HashReport_*.txt` to verify backup integrity before restore
 
 ## Extension Points & Common Tasks
 
@@ -183,8 +189,17 @@ $wslPath = "/mnt/" + ($BackupDir.Replace(":", "").Replace("\", "/").ToLower())
 4. Use `Get-AppCategory` for categorization
 5. Track in `$knownApps` to avoid duplicates
 
+### Customizing Dotfiles Backup
+Edit `Scripts/WSL/backup-dotfiles.sh` → `INCLUDE_ITEMS` array:
+```bash
+INCLUDE_ITEMS=(".bashrc" ".zshrc" ".profile" ".gitconfig" ".ssh" ".config/nvim" "scripts")
+# Add or remove items relative to $HOME
+```
+- Uses `--ignore-failed-read` to gracefully skip permission errors
+- Creates timestamped archive: `~/wsl-dotfile-backups/dotfiles_YYYY-MM-DD_HH-MM-SS.tar.gz`
+
 ### Adding Custom Post-Install
-Edit `post-restore-install.sh`:
+Edit `Scripts/WSL/post-restore-install.sh`:
 ```bash
 #!/bin/bash
 # Add custom setup after dotfiles restored
