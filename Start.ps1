@@ -13,7 +13,7 @@ $defaultConfig = @{
     InventoryDirectory  = "Inventories"
     InstallersDirectory = "Installers"
     LogDirectory        = "Logs"
-    ExternalBackupRoot  = ""
+    BackupRootDirectory = ""
     WslDistroName       = "Ubuntu"
     InventoryOutputCSV  = "INSTALLED-SOFTWARE-INVENTORY.csv"
     InventoryInputCSV   = "SOFTWARE-INSTALLATION-INVENTORY.csv"
@@ -58,41 +58,43 @@ Init-Folders
 function Validate-BackupPath {
     param([ref]$config)
     
-    $backupPath = $config.Value.ExternalBackupRoot
+    $backupPath = $config.Value.BackupRootDirectory
     
-    # If path is empty or invalid, prompt user
-    if ([string]::IsNullOrWhiteSpace($backupPath) -or -not (Test-Path $backupPath)) {
-        Write-Host "`n⚠ External Backup Location Not Set" -ForegroundColor Yellow
-        Write-Host "You need to specify where WSL backups will be stored.`n" -ForegroundColor Cyan
+    # If path is empty or invalid, use default or prompt user
+    if ([string]::IsNullOrWhiteSpace($backupPath)) {
+        $defaultPath = Join-Path (Split-Path -Parent $PSScriptRoot) "Windows-WSL2-Backup"
+        Write-Host "`n⚠ Backup Location Not Set" -ForegroundColor Yellow
+        Write-Host "You need to specify where backups will be stored.`n" -ForegroundColor Cyan
         
-        Write-Host "Default: $PSScriptRoot\migration-backups" -ForegroundColor DarkGray
+        Write-Host "Default: $defaultPath" -ForegroundColor DarkGray
         Write-Host "Enter path (press Enter for default): " -ForegroundColor Cyan -NoNewline
         $userPath = Read-Host
         
         if ([string]::IsNullOrWhiteSpace($userPath)) {
-            $backupPath = "$PSScriptRoot\migration-backups"
+            $backupPath = $defaultPath
         } else {
             $backupPath = $userPath
         }
-        
-        # Create the directory if it doesn't exist
-        if (-not (Test-Path $backupPath)) {
-            try {
-                New-Item -ItemType Directory -Force -Path $backupPath | Out-Null
-                Write-Host "✓ Created backup directory: $backupPath" -ForegroundColor Green
-            } catch {
-                Write-Host "✗ Failed to create directory: $backupPath" -ForegroundColor Red
-                Write-Host "Error: $_" -ForegroundColor Red
-                Write-Host "Using default location instead..." -ForegroundColor Yellow
-                $backupPath = "$PSScriptRoot\migration-backups"
-                New-Item -ItemType Directory -Force -Path $backupPath | Out-Null
-            }
-        }
-        
-        # Update config
-        $config.Value.ExternalBackupRoot = $backupPath
-        $config.Value | ConvertTo-Json | Out-File $configPath -Encoding UTF8
     }
+    
+    # Create the directory if it doesn't exist
+    if (-not (Test-Path $backupPath)) {
+        try {
+            New-Item -ItemType Directory -Force -Path $backupPath | Out-Null
+            Write-Host "✓ Created backup directory: $backupPath" -ForegroundColor Green
+        } catch {
+            Write-Host "✗ Failed to create directory: $backupPath" -ForegroundColor Red
+            Write-Host "Error: $_" -ForegroundColor Red
+            $defaultPath = Join-Path (Split-Path -Parent $PSScriptRoot) "Windows-WSL2-Backup"
+            Write-Host "Using default location instead..." -ForegroundColor Yellow
+            $backupPath = $defaultPath
+            New-Item -ItemType Directory -Force -Path $backupPath | Out-Null
+        }
+    }
+    
+    # Update config
+    $config.Value.BackupRootDirectory = $backupPath
+    $config.Value | ConvertTo-Json | Out-File $configPath -Encoding UTF8
 }
 
 $currentConfig = Load-Config

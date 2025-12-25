@@ -8,13 +8,20 @@ $RootDir = Split-Path -Parent $ScriptDir
 $config = Get-Content "$RootDir\config.json" -Raw | ConvertFrom-Json
 
 $Distro = $config.WslDistroName
-# Look in the WSL subfolder
-$BackupDir = Join-Path $config.ExternalBackupRoot "WSL"
+# Find the latest timestamped backup directory
+$BackupBaseDir = $config.BackupRootDirectory
+$LatestBackup = Get-ChildItem -Path $BackupBaseDir -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+if (-not $LatestBackup) {
+    Write-Error "No backups found in $BackupBaseDir"
+}
+
+$BackupDir = $LatestBackup.FullName
 $InstallLocation = "C:\WSL\$Distro"
 $WslScriptsDir = "$RootDir\Scripts\WSL"
 
 Write-Host "`n=== WSL SYSTEM RESTORE ===" -ForegroundColor Cyan
-Write-Host "Source: $BackupDir"
+Write-Host "Source: $BackupDir" -ForegroundColor Yellow
 Write-Host "Dest:   $InstallLocation"
 
 # 1. Find Backups
