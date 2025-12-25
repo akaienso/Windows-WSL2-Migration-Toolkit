@@ -82,19 +82,41 @@ function Validate-BackupPath {
         }
     }
     
-    # Create the directory if it doesn't exist
+    # Resolve the path to absolute (if relative, make it relative to toolkit parent)
+    if (-not [System.IO.Path]::IsPathRooted($backupPath)) {
+        $backupPath = Join-Path (Split-Path -Parent $PSScriptRoot) $backupPath
+    }
+    
+    # Validate the path doesn't have invalid characters
+    $invalidChars = [System.IO.Path]::GetInvalidPathChars()
+    if ($backupPath -match "[$([regex]::Escape($invalidChars))]") {
+        Write-Host "✗ Invalid path - contains illegal characters: $backupPath" -ForegroundColor Red
+        Write-Host "Using default location instead..." -ForegroundColor Yellow
+        $backupPath = Join-Path (Split-Path -Parent $PSScriptRoot) "Windows-WSL2-Backup"
+    }
+    
+    # Check if the directory exists
     if (-not (Test-Path $backupPath)) {
-        try {
-            New-Item -ItemType Directory -Force -Path $backupPath | Out-Null
-            Write-Host "✓ Created backup directory: $backupPath" -ForegroundColor Green
-        } catch {
-            Write-Host "✗ Failed to create directory: $backupPath" -ForegroundColor Red
-            Write-Host "Error: $_" -ForegroundColor Red
-            $defaultPath = Join-Path (Split-Path -Parent $PSScriptRoot) "Windows-WSL2-Backup"
-            Write-Host "Using default location instead..." -ForegroundColor Yellow
-            $backupPath = $defaultPath
-            New-Item -ItemType Directory -Force -Path $backupPath | Out-Null
+        Write-Host "`n⚠ Backup directory does not exist: $backupPath" -ForegroundColor Yellow
+        Write-Host "Create this directory? (Y/n): " -ForegroundColor Cyan -NoNewline
+        $createDir = Read-Host
+        
+        if ([string]::IsNullOrWhiteSpace($createDir) -or $createDir -match '^[yY]$') {
+            try {
+                New-Item -ItemType Directory -Force -Path $backupPath | Out-Null
+                Write-Host "✓ Created backup directory: $backupPath" -ForegroundColor Green
+            } catch {
+                Write-Host "✗ Failed to create directory: $_" -ForegroundColor Red
+                Write-Host "Using default location instead..." -ForegroundColor Yellow
+                $backupPath = Join-Path (Split-Path -Parent $PSScriptRoot) "Windows-WSL2-Backup"
+                New-Item -ItemType Directory -Force -Path $backupPath | Out-Null
+            }
+        } else {
+            Write-Host "Cannot proceed without backup directory." -ForegroundColor Red
+            exit 1
         }
+    } else {
+        Write-Host "✓ Backup directory exists: $backupPath" -ForegroundColor Green
     }
     
     # Update config
