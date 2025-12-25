@@ -99,11 +99,10 @@ $wslBackupPath = "/mnt/$driveLetter$pathWithoutDrive"
 
 # Create the backup directory in WSL if it doesn't exist
 wsl -d $Distro -- bash -lc "mkdir -p '$wslBackupPath'"
-# Copy the dotfiles to the backup directory
-wsl -d $Distro -- bash -lc "cp ~/wsl-dotfile-backups/$LatestDotfile '$wslBackupPath/'"
 
-$targetDotfile = Join-Path $BackupDir ("WslDotfiles_{0}.tar.gz" -f $Timestamp)
-Rename-Item (Join-Path $BackupDir $LatestDotfile) -NewName $targetDotfile -Force
+# Copy the dotfiles to the backup directory with renamed filename
+$targetDotfile = "WslDotfiles_{0}.tar.gz" -f $Timestamp
+wsl -d $Distro -- bash -lc "cp ~/wsl-dotfile-backups/$LatestDotfile '$wslBackupPath/$targetDotfile'"
 
 # 3. Full Export
 Write-Host "`n3. Exporting Full Distro Image (This may take time)..." -ForegroundColor Magenta
@@ -115,7 +114,8 @@ wsl --export $Distro $FullExportFile
 # 4. Hash & Finish
 Write-Host "`n4. Generating Hashes..." -ForegroundColor Cyan
 $h1 = Get-FileHash $FullExportFile -Algorithm SHA256
-$h2 = Get-FileHash $targetDotfile -Algorithm SHA256
+$targetDotfilePath = Join-Path $BackupDir $targetDotfile
+$h2 = Get-FileHash $targetDotfilePath -Algorithm SHA256
 $report = "WSL Backup Report ($Timestamp)`n---------------------------`nFull: $($h1.Hash)`nDots: $($h2.Hash)"
 $report | Out-File (Join-Path $BackupDir "HashReport_$Timestamp.txt")
 
