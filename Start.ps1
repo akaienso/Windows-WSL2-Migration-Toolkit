@@ -112,7 +112,7 @@ function Migrate-LegacyFolders {
     $legacyInvDir = Join-Path $PSScriptRoot "Inventories"
     if (Test-Path $legacyInvDir) {
         Write-Host "`n🔄 Migrating legacy Inventories folder..." -ForegroundColor Yellow
-        $newInvDir = Join-Path $config.Value.BackupRootDirectory "AppData\Inventories"
+        $newInvDir = Join-Path $config.Value.BackupRootDirectory "AppData\$migrationTimestamp\Inventories"
         New-Item -ItemType Directory -Force -Path $newInvDir | Out-Null
         
         Get-ChildItem $legacyInvDir | ForEach-Object {
@@ -127,7 +127,7 @@ function Migrate-LegacyFolders {
     $legacyInstDir = Join-Path $PSScriptRoot "Installers"
     if (Test-Path $legacyInstDir) {
         Write-Host "`n🔄 Migrating legacy Installers folder..." -ForegroundColor Yellow
-        $newInstDir = Join-Path $config.Value.BackupRootDirectory "AppData\Installers"
+        $newInstDir = Join-Path $config.Value.BackupRootDirectory "AppData\$migrationTimestamp\Installers"
         New-Item -ItemType Directory -Force -Path $newInstDir | Out-Null
         
         Get-ChildItem $legacyInstDir | ForEach-Object {
@@ -157,7 +157,7 @@ function Migrate-LegacyFolders {
         # Move AppData backups
         $legacyAppDataDir = Join-Path $legacyBackupDir "AppData_Backups"
         if (Test-Path $legacyAppDataDir) {
-            $newAppDataDir = Join-Path $config.Value.BackupRootDirectory "AppData\Backups\$migrationTimestamp"
+            $newAppDataDir = Join-Path $config.Value.BackupRootDirectory "AppData\$migrationTimestamp\Backups"
             New-Item -ItemType Directory -Force -Path $newAppDataDir | Out-Null
             Get-ChildItem $legacyAppDataDir | ForEach-Object {
                 Move-Item -Path $_.FullName -Destination $newAppDataDir -Force

@@ -10,8 +10,20 @@ $RootDir = Split-Path -Parent $ScriptDir
 $configPath = "$RootDir\config.json"
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
 
-$invDir = "$($config.BackupRootDirectory)\AppData\Inventories"
-$installDir = "$($config.BackupRootDirectory)\AppData\Installers"
+# Find the most recent AppData timestamped directory
+$appDataBaseDir = "$($config.BackupRootDirectory)\AppData"
+$latestTimestamp = Get-ChildItem -Path $appDataBaseDir -Directory -ErrorAction SilentlyContinue | 
+                   Sort-Object LastWriteTime -Descending | 
+                   Select-Object -First 1 | 
+                   ForEach-Object { $_.Name }
+
+if (-not $latestTimestamp) {
+    Write-Error "No AppData timestamped directory found. Run Option 1 (Get-Inventory) first."
+    exit 1
+}
+
+$invDir = "$appDataBaseDir\$latestTimestamp\Inventories"
+$installDir = "$appDataBaseDir\$latestTimestamp\Installers"
 
 # Use provided InputFile or default to config location
 if ([string]::IsNullOrWhiteSpace($InputFile)) {

@@ -8,7 +8,9 @@ $configPath = "$RootDir\config.json"
 if (Test-Path $configPath) { $config = Get-Content $configPath -Raw | ConvertFrom-Json } 
 else { Write-Error "Config missing."; exit }
 
-$invDir = "$($config.BackupRootDirectory)\AppData\Inventories"
+$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+$appDataBaseDir = "$($config.BackupRootDirectory)\AppData\$timestamp"
+$invDir = "$appDataBaseDir\Inventories"
 $logDir = "$RootDir\$($config.LogDirectory)"
 $csvPath = "$invDir\$($config.InventoryOutputCSV)"
 $wingetJsonPath = "$invDir\winget-apps.json"

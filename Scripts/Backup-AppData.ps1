@@ -18,8 +18,8 @@ $invDir = "$($config.BackupRootDirectory)\AppData\Inventories"
 $logDir = "$RootDir\$($config.LogDirectory)"
 $backupRootDirectory = $config.BackupRootDirectory
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$appDataBackupBaseDir = Join-Path $backupRootDirectory "AppData\Backups"
-$appDataBackupDir = Join-Path $appDataBackupBaseDir $timestamp
+$appDataBackupBaseDir = Join-Path $backupRootDirectory "AppData\$timestamp\Backups"
+$appDataBackupDir = $appDataBackupBaseDir
 $csvPath = "$invDir\$($config.InventoryInputCSV)"
 $folderMapPath = "$invDir\AppData_Folder_Map.json"
 
@@ -43,7 +43,8 @@ Write-Host "Backup destination: $appDataBackupDir" -ForegroundColor DarkGray
 Write-Host "Folder map: $folderMapPath" -ForegroundColor DarkGray
 
 # --- CHECK FOR EXISTING APPDATA BACKUPS ---
-$existingBackups = @(Get-ChildItem -Path $appDataBackupBaseDir -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+$appDataTimestampBaseDir = Join-Path $backupRootDirectory "AppData"
+$existingBackups = @(Get-ChildItem -Path $appDataTimestampBaseDir -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
 
 if ($existingBackups.Count -gt 0) {
     Write-Host "`n⚠ Found $($existingBackups.Count) existing AppData backup(s):" -ForegroundColor Yellow
