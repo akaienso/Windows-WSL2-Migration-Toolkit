@@ -1,5 +1,4 @@
-# Configuration
-config.json
+# User Configuration (persisted settings - do not commit)
 settings.json
 
 # Runtime Data

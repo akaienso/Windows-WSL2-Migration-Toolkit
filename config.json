@@ -1,0 +1,8 @@
+{
+  "BackupRootDirectory": "",
+  "WslDistroName": "",
+  "LogDirectory": "Logs",
+  "ScriptDirectory": "Scripts",
+  "InventoryOutputCSV": "INSTALLED-SOFTWARE-INVENTORY.csv",
+  "InventoryInputCSV": "SOFTWARE-INSTALLATION-INVENTORY.csv"
+}
