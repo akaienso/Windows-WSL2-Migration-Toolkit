@@ -121,34 +121,57 @@ function Validate-WslDistro {
         Write-Host "`n⚠ WSL Distro Not Configured" -ForegroundColor Yellow
         Write-Host "You need to specify which WSL distro to backup/restore.`n" -ForegroundColor Cyan
         
-        # Try to list available distros
+        # Try to list available distros from WSL
         $availableDistros = @()
         try {
-            $wslList = wsl --list --quiet 2>$null
-            if ($wslList) {
-                $availableDistros = $wslList | Where-Object { $_ -and $_ -notmatch "^Windows" } | ForEach-Object { $_.Trim() }
+            $wslOutput = wsl --list --quiet 2>$null
+            if ($wslOutput) {
+                # Parse the output - filter out empty lines and Windows system line
+                $availableDistros = @($wslOutput | Where-Object { 
+                    $_ -and $_.Trim() -and $_.Trim() -notmatch "^Windows" 
+                } | ForEach-Object { $_.Trim() })
             }
         } catch {
-            # WSL might not be installed or no distros available
+            # WSL might not be installed
         }
         
+        # Display options
         if ($availableDistros.Count -gt 0) {
-            Write-Host "Available WSL Distros:" -ForegroundColor Cyan
+            Write-Host "Installed WSL Distros:" -ForegroundColor Cyan
             $i = 1
             foreach ($d in $availableDistros) {
-                Write-Host "  $i. $d" -ForegroundColor White
+                if ($d) {  # Only display non-empty entries
+                    Write-Host "  $i. $d" -ForegroundColor White
+                    $i++
+                }
             }
-            Write-Host "  Enter number or custom distro name: " -ForegroundColor Cyan -NoNewline
+            Write-Host "  $i. Other (enter custom distro name)" -ForegroundColor DarkGray
+            
+            Write-Host "`nSelect an option (1-$i): " -ForegroundColor Cyan -NoNewline
             $selection = Read-Host
             
-            if ($selection -match "^\d+$" -and [int]$selection -ge 1 -and [int]$selection -le $availableDistros.Count) {
-                $distro = $availableDistros[[int]$selection - 1]
+            if ($selection -match "^\d+$") {
+                $selNum = [int]$selection
+                if ($selNum -ge 1 -and $selNum -lt $i) {
+                    $distro = $availableDistros[$selNum - 1]
+                } elseif ($selNum -eq $i) {
+                    Write-Host "Enter custom distro name: " -ForegroundColor Cyan -NoNewline
+                    $distro = Read-Host
+                    if ([string]::IsNullOrWhiteSpace($distro)) {
+                        $distro = "Ubuntu"  # Fallback
+                    }
+                } else {
+                    Write-Host "Invalid selection. Using Ubuntu." -ForegroundColor Yellow
+                    $distro = "Ubuntu"
+                }
             } else {
-                $distro = $selection
+                $distro = $selection  # User typed a custom name
             }
         } else {
+            # No distros found, prompt for manual entry
+            Write-Host "No WSL distros detected. Enter your distro name:" -ForegroundColor Yellow
             Write-Host "Default: Ubuntu" -ForegroundColor DarkGray
-            Write-Host "Enter WSL distro name (press Enter for default): " -ForegroundColor Cyan -NoNewline
+            Write-Host "Distro name: " -ForegroundColor Cyan -NoNewline
             $userInput = Read-Host
             $distro = if ([string]::IsNullOrWhiteSpace($userInput)) { "Ubuntu" } else { $userInput }
         }
