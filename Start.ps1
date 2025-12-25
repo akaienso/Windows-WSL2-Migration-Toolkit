@@ -100,6 +100,74 @@ function Validate-BackupPath {
 $currentConfig = Load-Config
 Validate-BackupPath ([ref]$currentConfig)
 
+# --- FIND BACKUP DIRECTORY FOR RESTORE ---
+function Find-BackupDirectory {
+    <#
+    .SYNOPSIS
+    Locates the backup directory for restore operations.
+    Checks default location first, then prompts user if needed.
+    #>
+    
+    $defaultBackupRoot = Join-Path (Split-Path -Parent $PSScriptRoot) "Windows-WSL2-Backup"
+    
+    # Check if default location exists
+    if (Test-Path $defaultBackupRoot) {
+        Write-Host "`n📂 Found backup directory: $defaultBackupRoot" -ForegroundColor Green
+        
+        # Find the most recent timestamped backup folder
+        $timestampedBackups = @(Get-ChildItem -Path $defaultBackupRoot -Directory -ErrorAction SilentlyContinue | 
+                                Sort-Object LastWriteTime -Descending)
+        
+        if ($timestampedBackups.Count -gt 0) {
+            $latestBackup = $timestampedBackups[0]
+            Write-Host "📅 Most recent backup: $($latestBackup.Name)" -ForegroundColor Cyan
+            
+            if ($timestampedBackups.Count -gt 1) {
+                Write-Host "   (Found $($timestampedBackups.Count - 1) older backup(s))" -ForegroundColor DarkGray
+            }
+            
+            Write-Host "`n❓ Restore from this backup?" -ForegroundColor Yellow
+            Write-Host "   Path: $($latestBackup.FullName)" -ForegroundColor DarkGray
+            Write-Host "   Yes (Y) / No (N) / Browse All (B): " -ForegroundColor Cyan -NoNewline
+            $response = Read-Host
+            
+            if ($response -match "^(Y|Yes)$") {
+                return $latestBackup.FullName
+            } elseif ($response -match "^(B|Browse)$") {
+                Write-Host "`nAvailable backups:" -ForegroundColor Cyan
+                $i = 1
+                foreach ($backup in $timestampedBackups) {
+                    Write-Host "  $i. $($backup.Name) ($(Get-Date $backup.LastWriteTime -Format 'yyyy-MM-dd HH:mm:ss'))" -ForegroundColor White
+                }
+                
+                $selection = Read-Host "Select backup number"
+                if ($selection -match "^\d+$" -and [int]$selection -ge 1 -and [int]$selection -le $timestampedBackups.Count) {
+                    return $timestampedBackups[[int]$selection - 1].FullName
+                } else {
+                    Write-Host "Invalid selection. Using most recent backup." -ForegroundColor Yellow
+                    return $latestBackup.FullName
+                }
+            }
+        } else {
+            Write-Host "⚠ Default backup location exists but contains no timestamped directories." -ForegroundColor Yellow
+        }
+    }
+    
+    # If we reach here, ask user for custom path
+    Write-Host "`n⚠ Could not locate backups in default location." -ForegroundColor Yellow
+    Write-Host "Default path: $defaultBackupRoot" -ForegroundColor DarkGray
+    Write-Host "`nEnter the path to your backup directory: " -ForegroundColor Cyan -NoNewline
+    $customPath = Read-Host
+    
+    if (Test-Path $customPath) {
+        Write-Host "✓ Backup directory found: $customPath" -ForegroundColor Green
+        return $customPath
+    } else {
+        Write-Host "✗ Path not found: $customPath" -ForegroundColor Red
+        return $null
+    }
+}
+
 function Show-Menu {
     Clear-Host
     Write-Host "========================================================" -ForegroundColor Cyan

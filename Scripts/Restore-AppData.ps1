@@ -14,9 +14,20 @@ if (Test-Path $configPath) {
     exit 1
 }
 
+# Source the helper function from Start.ps1
+. "$RootDir\Start.ps1"
+
 $logDir = "$RootDir\$($config.LogDirectory)"
-$backupRoot = $config.ExternalBackupRoot
-$appDataBackupDir = "$backupRoot\AppData_Backups"
+
+# Find the backup directory
+$BackupDir = Find-BackupDirectory
+
+if (-not $BackupDir -or -not (Test-Path $BackupDir)) {
+    Write-Error "Unable to locate backup directory. Restore cancelled."
+    exit 1
+}
+
+$appDataBackupDir = "$BackupDir\AppData_Backups"
 
 # Ensure directories exist
 if (-not (Test-Path $logDir)) { 

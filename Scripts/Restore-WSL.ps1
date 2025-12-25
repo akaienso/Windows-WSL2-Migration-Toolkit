@@ -7,20 +7,22 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent $ScriptDir
 $config = Get-Content "$RootDir\config.json" -Raw | ConvertFrom-Json
 
-$Distro = $config.WslDistroName
-# Find the latest timestamped backup directory
-$BackupBaseDir = $config.BackupRootDirectory
-$LatestBackup = Get-ChildItem -Path $BackupBaseDir -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+# Source the helper function from Start.ps1
+. "$RootDir\Start.ps1"
 
-if (-not $LatestBackup) {
-    Write-Error "No backups found in $BackupBaseDir"
+$Distro = $config.WslDistroName
+
+# Find the backup directory
+Write-Host "`n=== WSL SYSTEM RESTORE ===" -ForegroundColor Cyan
+$BackupDir = Find-BackupDirectory
+
+if (-not $BackupDir -or -not (Test-Path $BackupDir)) {
+    Write-Error "Unable to locate backup directory. Restore cancelled."
 }
 
-$BackupDir = $LatestBackup.FullName
 $InstallLocation = "C:\WSL\$Distro"
 $WslScriptsDir = "$RootDir\Scripts\WSL"
 
-Write-Host "`n=== WSL SYSTEM RESTORE ===" -ForegroundColor Cyan
 Write-Host "Source: $BackupDir" -ForegroundColor Yellow
 Write-Host "Dest:   $InstallLocation"
 
