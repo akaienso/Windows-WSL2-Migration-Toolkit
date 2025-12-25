@@ -432,7 +432,7 @@ do {
 
     switch ($choice) {
         "1" { 
-            Clear-Host; $target = "$scriptPath\Inventory\Get-Inventory.ps1"
+            Clear-Host; $target = "$scriptPath\ApplicationInventory\Get-Inventory.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Write-Host "`n✓ Inventory complete! Next steps:" -ForegroundColor Green
             Write-Host "  1. Go to Inventories/ folder" -ForegroundColor Cyan
@@ -444,7 +444,7 @@ do {
             Pause
         }
         "2" { 
-            Clear-Host; $target = "$scriptPath\Inventory\Generate-Restore-Scripts.ps1"
+            Clear-Host; $target = "$scriptPath\ApplicationInventory\Generate-Restore-Scripts.ps1"
             $inputFile = "$PSScriptRoot\$($currentConfig.InventoryDirectory)\$($currentConfig.InventoryInputCSV)"
             
             # Check if default file exists
