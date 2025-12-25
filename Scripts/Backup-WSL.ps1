@@ -8,20 +8,21 @@ $RootDir = Split-Path -Parent $ScriptDir
 $config = Get-Content "$RootDir\config.json" -Raw | ConvertFrom-Json
 
 $Distro = $config.WslDistroName
-# Create a timestamp-based subdirectory
+# Create a timestamp-based subdirectory under WSL backup type
 $Timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$BackupDir = Join-Path $config.BackupRootDirectory $Timestamp
+$WslBackupBaseDir = Join-Path $config.BackupRootDirectory "WSL"
+$BackupDir = Join-Path $WslBackupBaseDir $Timestamp
 $WslScriptsDir = "$RootDir\Scripts\WSL"
 
 Write-Host "`n=== WSL SYSTEM BACKUP ===" -ForegroundColor Cyan
 Write-Host "Distro: $Distro"
 Write-Host "Backup Root: $($config.BackupRootDirectory)"
 
-# --- CHECK FOR EXISTING BACKUPS ---
-$existingBackups = @(Get-ChildItem -Path $config.BackupRootDirectory -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+# --- CHECK FOR EXISTING WSL BACKUPS ---
+$existingBackups = @(Get-ChildItem -Path $WslBackupBaseDir -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
 
 if ($existingBackups.Count -gt 0) {
-    Write-Host "`n⚠ Found $($existingBackups.Count) existing backup(s):" -ForegroundColor Yellow
+    Write-Host "`n⚠ Found $($existingBackups.Count) existing WSL backup(s):" -ForegroundColor Yellow
     foreach ($backup in $existingBackups | Select-Object -First 5) {
         Write-Host "   • $($backup.Name)" -ForegroundColor DarkGray
     }
@@ -29,20 +30,20 @@ if ($existingBackups.Count -gt 0) {
         Write-Host "   ... and $($existingBackups.Count - 5) more" -ForegroundColor DarkGray
     }
     
-    Write-Host "`n❓ Replace existing backups with a new one?" -ForegroundColor Cyan
-    Write-Host "   Note: This will DELETE all existing backups and create a fresh backup with current timestamp." -ForegroundColor DarkGray
+    Write-Host "`n❓ Replace existing WSL backups with a new one?" -ForegroundColor Cyan
+    Write-Host "   Note: This will DELETE all existing WSL backups and create a fresh backup with current timestamp." -ForegroundColor DarkGray
     Write-Host "   Yes (Y) / No (N): " -ForegroundColor Cyan -NoNewline
     $response = Read-Host
     
     if ($response -match "^(Y|Yes)$") {
-        Write-Host "`nRemoving existing backups..." -ForegroundColor Yellow
+        Write-Host "`nRemoving existing WSL backups..." -ForegroundColor Yellow
         foreach ($backup in $existingBackups) {
             Remove-Item -Path $backup.FullName -Recurse -Force -ErrorAction SilentlyContinue
             Write-Host "   ✓ Deleted: $($backup.Name)" -ForegroundColor DarkGray
         }
-        Write-Host "Existing backups removed." -ForegroundColor Green
+        Write-Host "Existing WSL backups removed." -ForegroundColor Green
     } else {
-        Write-Host "Keeping existing backups. Creating new backup in separate directory." -ForegroundColor Cyan
+        Write-Host "Keeping existing WSL backups. Creating new backup in separate directory." -ForegroundColor Cyan
     }
 }
 

@@ -106,21 +106,32 @@ function Find-BackupDirectory {
     .SYNOPSIS
     Locates the backup directory for restore operations.
     Checks default location first, then prompts user if needed.
+    
+    .PARAMETER BackupTypeDir
+    The subdirectory for the backup type (e.g., WSL, AppData)
+    
+    .PARAMETER BackupType
+    The name of the backup type for display purposes
     #>
+    param(
+        [string]$BackupTypeDir = "",
+        [string]$BackupType = "Backup"
+    )
     
-    $defaultBackupRoot = Join-Path (Split-Path -Parent $PSScriptRoot) "Windows-WSL2-Backup"
+    # If a specific backup type dir was provided, use it; otherwise use the base backup root
+    $searchDir = if ($BackupTypeDir) { $BackupTypeDir } else { Join-Path (Split-Path -Parent $PSScriptRoot) "Windows-WSL2-Backup" }
     
-    # Check if default location exists
-    if (Test-Path $defaultBackupRoot) {
-        Write-Host "`n📂 Found backup directory: $defaultBackupRoot" -ForegroundColor Green
+    # Check if the search directory exists
+    if (Test-Path $searchDir) {
+        Write-Host "`n📂 Found $BackupType backup directory: $searchDir" -ForegroundColor Green
         
         # Find the most recent timestamped backup folder
-        $timestampedBackups = @(Get-ChildItem -Path $defaultBackupRoot -Directory -ErrorAction SilentlyContinue | 
+        $timestampedBackups = @(Get-ChildItem -Path $searchDir -Directory -ErrorAction SilentlyContinue | 
                                 Sort-Object LastWriteTime -Descending)
         
         if ($timestampedBackups.Count -gt 0) {
             $latestBackup = $timestampedBackups[0]
-            Write-Host "📅 Most recent backup: $($latestBackup.Name)" -ForegroundColor Cyan
+            Write-Host "📅 Most recent $BackupType backup: $($latestBackup.Name)" -ForegroundColor Cyan
             
             if ($timestampedBackups.Count -gt 1) {
                 Write-Host "   (Found $($timestampedBackups.Count - 1) older backup(s))" -ForegroundColor DarkGray
@@ -134,7 +145,7 @@ function Find-BackupDirectory {
             if ($response -match "^(Y|Yes)$") {
                 return $latestBackup.FullName
             } elseif ($response -match "^(B|Browse)$") {
-                Write-Host "`nAvailable backups:" -ForegroundColor Cyan
+                Write-Host "`nAvailable $BackupType backups:" -ForegroundColor Cyan
                 $i = 1
                 foreach ($backup in $timestampedBackups) {
                     Write-Host "  $i. $($backup.Name) ($(Get-Date $backup.LastWriteTime -Format 'yyyy-MM-dd HH:mm:ss'))" -ForegroundColor White
@@ -149,14 +160,14 @@ function Find-BackupDirectory {
                 }
             }
         } else {
-            Write-Host "⚠ Default backup location exists but contains no timestamped directories." -ForegroundColor Yellow
+            Write-Host "⚠ $BackupType backup location exists but contains no timestamped directories." -ForegroundColor Yellow
         }
     }
     
     # If we reach here, ask user for custom path
-    Write-Host "`n⚠ Could not locate backups in default location." -ForegroundColor Yellow
-    Write-Host "Default path: $defaultBackupRoot" -ForegroundColor DarkGray
-    Write-Host "`nEnter the path to your backup directory: " -ForegroundColor Cyan -NoNewline
+    Write-Host "`n⚠ Could not locate $BackupType backups in default location." -ForegroundColor Yellow
+    Write-Host "Default path: $searchDir" -ForegroundColor DarkGray
+    Write-Host "`nEnter the path to your $BackupType backup directory: " -ForegroundColor Cyan -NoNewline
     $customPath = Read-Host
     
     if (Test-Path $customPath) {

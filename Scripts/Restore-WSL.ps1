@@ -12,12 +12,13 @@ $config = Get-Content "$RootDir\config.json" -Raw | ConvertFrom-Json
 
 $Distro = $config.WslDistroName
 
-# Find the backup directory
+# Find the WSL backup directory
 Write-Host "`n=== WSL SYSTEM RESTORE ===" -ForegroundColor Cyan
-$BackupDir = Find-BackupDirectory
+$WslBackupDir = Join-Path $config.BackupRootDirectory "WSL"
+$BackupDir = Find-BackupDirectory -BackupTypeDir $WslBackupDir -BackupType "WSL"
 
 if (-not $BackupDir -or -not (Test-Path $BackupDir)) {
-    Write-Error "Unable to locate backup directory. Restore cancelled."
+    Write-Error "Unable to locate WSL backup directory. Restore cancelled."
 }
 
 $InstallLocation = "C:\WSL\$Distro"

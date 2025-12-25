@@ -16,9 +16,11 @@ if (Test-Path $configPath) {
 
 $invDir = "$RootDir\$($config.InventoryDirectory)"
 $logDir = "$RootDir\$($config.LogDirectory)"
-$backupRoot = $config.ExternalBackupRoot
+$backupRootDirectory = $config.BackupRootDirectory
+$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+$appDataBackupBaseDir = Join-Path $backupRootDirectory "AppData"
+$appDataBackupDir = Join-Path $appDataBackupBaseDir $timestamp
 $csvPath = "$invDir\$($config.InventoryInputCSV)"
-$appDataBackupDir = "$backupRoot\AppData_Backups"
 $folderMapPath = "$invDir\AppData_Folder_Map.json"
 
 # Ensure directories exist
@@ -29,19 +31,49 @@ if (-not (Test-Path $invDir)) {
 if (-not (Test-Path $logDir)) { 
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null 
 }
-if (-not (Test-Path $appDataBackupDir)) { 
-    New-Item -ItemType Directory -Force -Path $appDataBackupDir | Out-Null 
-}
 
 # Setup logging
-$timestamp = Get-Date -Format "yyyyMMdd_HHmm"
-$logFile = "$logDir\AppData_Backup_$timestamp.txt"
+$logTimestamp = Get-Date -Format "yyyyMMdd_HHmm"
+$logFile = "$logDir\AppData_Backup_$logTimestamp.txt"
 Start-Transcript -Path $logFile -Append | Out-Null
 
 Write-Host "`n=== STARTING APPDATA BACKUP ===" -ForegroundColor Cyan
 Write-Host "CSV: $csvPath" -ForegroundColor DarkGray
 Write-Host "Backup destination: $appDataBackupDir" -ForegroundColor DarkGray
 Write-Host "Folder map: $folderMapPath" -ForegroundColor DarkGray
+
+# --- CHECK FOR EXISTING APPDATA BACKUPS ---
+$existingBackups = @(Get-ChildItem -Path $appDataBackupBaseDir -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+
+if ($existingBackups.Count -gt 0) {
+    Write-Host "`n⚠ Found $($existingBackups.Count) existing AppData backup(s):" -ForegroundColor Yellow
+    foreach ($backup in $existingBackups | Select-Object -First 5) {
+        Write-Host "   • $($backup.Name)" -ForegroundColor DarkGray
+    }
+    if ($existingBackups.Count -gt 5) {
+        Write-Host "   ... and $($existingBackups.Count - 5) more" -ForegroundColor DarkGray
+    }
+    
+    Write-Host "`n❓ Replace existing AppData backups with new ones?" -ForegroundColor Cyan
+    Write-Host "   Note: This will DELETE all existing AppData backups and create fresh backups with current timestamp." -ForegroundColor DarkGray
+    Write-Host "   Yes (Y) / No (N): " -ForegroundColor Cyan -NoNewline
+    $response = Read-Host
+    
+    if ($response -match "^(Y|Yes)$") {
+        Write-Host "`nRemoving existing AppData backups..." -ForegroundColor Yellow
+        foreach ($backup in $existingBackups) {
+            Remove-Item -Path $backup.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "   ✓ Deleted: $($backup.Name)" -ForegroundColor DarkGray
+        }
+        Write-Host "Existing AppData backups removed." -ForegroundColor Green
+    } else {
+        Write-Host "Keeping existing AppData backups. Creating new backup in separate directory." -ForegroundColor Cyan
+    }
+}
+
+if (-not (Test-Path $appDataBackupDir)) { 
+    New-Item -ItemType Directory -Force -Path $appDataBackupDir | Out-Null 
+}
 
 # Load or create folder mapping
 $folderMap = @{}

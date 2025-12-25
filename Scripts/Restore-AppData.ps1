@@ -19,15 +19,16 @@ if (Test-Path $configPath) {
 
 $logDir = "$RootDir\$($config.LogDirectory)"
 
-# Find the backup directory
-$BackupDir = Find-BackupDirectory
+# Find the AppData backup directory
+$AppDataBackupDir = Join-Path $config.BackupRootDirectory "AppData"
+$BackupDir = Find-BackupDirectory -BackupTypeDir $AppDataBackupDir -BackupType "AppData"
 
 if (-not $BackupDir -or -not (Test-Path $BackupDir)) {
-    Write-Error "Unable to locate backup directory. Restore cancelled."
+    Write-Error "Unable to locate AppData backup directory. Restore cancelled."
     exit 1
 }
 
-$appDataBackupDir = "$BackupDir\AppData_Backups"
+$appDataBackupDir = $BackupDir
 
 # Ensure directories exist
 if (-not (Test-Path $logDir)) { 
