@@ -6,6 +6,9 @@ $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location -Path $PSScriptRoot
 $configPath = "$PSScriptRoot\config.json"
 
+# Initialize global variable for backup root (used by Load-Config)
+$global:BackupRootTemp = ""
+
 # --- DEFAULT CONFIGURATION ---
 $defaultConfig = @{
     BasePath            = "." 
@@ -19,6 +22,16 @@ $defaultConfig = @{
 
 # --- LOAD / CREATE CONFIG ---
 function Load-Config {
+    # Try settings.json in backup root first (if it exists)
+    if (-not [string]::IsNullOrWhiteSpace($global:BackupRootTemp)) {
+        $settingsPath = Join-Path $global:BackupRootTemp "settings.json"
+        if (Test-Path $settingsPath) {
+            $loaded = Get-Content $settingsPath -Raw | ConvertFrom-Json
+            return $loaded
+        }
+    }
+    
+    # Fall back to config.json in toolkit (default/template)
     if (Test-Path $configPath) {
         $loaded = Get-Content $configPath -Raw | ConvertFrom-Json
         foreach ($key in $defaultConfig.Keys) {
@@ -26,7 +39,6 @@ function Load-Config {
                 $loaded | Add-Member -NotePropertyName $key -NotePropertyValue $defaultConfig[$key]
             }
         }
-        $loaded | ConvertTo-Json | Out-File $configPath -Encoding UTF8
         return $loaded
     } else {
         $defaultConfig | ConvertTo-Json | Out-File $configPath -Encoding UTF8
@@ -90,7 +102,9 @@ function Validate-BackupPath {
     
     # Update config
     $config.Value.BackupRootDirectory = $backupPath
-    $config.Value | ConvertTo-Json | Out-File $configPath -Encoding UTF8
+    
+    # Store in global for later settings.json save
+    $global:BackupRootTemp = $backupPath
 }
 
 $currentConfig = Load-Config
@@ -141,7 +155,6 @@ function Validate-WslDistro {
         
         # Update config
         $config.Value.WslDistroName = $distro
-        $config.Value | ConvertTo-Json | Out-File $configPath -Encoding UTF8
         Write-Host "✓ WSL Distro set to: $distro" -ForegroundColor Green
     }
 }
@@ -254,6 +267,16 @@ function Migrate-LegacyFolders {
 }
 
 Migrate-LegacyFolders ([ref]$currentConfig)
+
+# --- SAVE SETTINGS TO BACKUP ROOT ---
+function Save-Settings {
+    param([ref]$config)
+    
+    $settingsPath = Join-Path $config.Value.BackupRootDirectory "settings.json"
+    $config.Value | ConvertTo-Json | Out-File $settingsPath -Encoding UTF8
+}
+
+Save-Settings ([ref]$currentConfig)
 
 # --- FIND BACKUP DIRECTORY FOR RESTORE ---
 function Find-BackupDirectory {
