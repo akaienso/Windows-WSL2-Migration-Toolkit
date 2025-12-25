@@ -20,7 +20,7 @@ if (Test-Path $configPath) {
 $logDir = "$RootDir\$($config.LogDirectory)"
 
 # Find the AppData backup directory
-$AppDataBackupDir = Join-Path $config.BackupRootDirectory "AppData"
+$AppDataBackupDir = Join-Path $config.BackupRootDirectory "AppData\Backups"
 $BackupDir = Find-BackupDirectory -BackupTypeDir $AppDataBackupDir -BackupType "AppData"
 
 if (-not $BackupDir -or -not (Test-Path $BackupDir)) {

@@ -10,7 +10,6 @@ $configPath = "$PSScriptRoot\config.json"
 $defaultConfig = @{
     BasePath            = "." 
     ScriptDirectory     = "Scripts"
-    InstallersDirectory = "Installers"
     LogDirectory        = "Logs"
     BackupRootDirectory = ""
     WslDistroName       = "Ubuntu"
@@ -41,8 +40,7 @@ $currentConfig = Load-Config
 function Init-Folders {
     $dirs = @(
         $currentConfig.LogDirectory, 
-        $currentConfig.ScriptDirectory,
-        $currentConfig.InstallersDirectory
+        $currentConfig.ScriptDirectory
     )
     foreach ($d in $dirs) {
         if (-not (Test-Path "$PSScriptRoot\$d")) {

@@ -10,8 +10,8 @@ $RootDir = Split-Path -Parent $ScriptDir
 $configPath = "$RootDir\config.json"
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
 
-$invDir = "$($config.BackupRootDirectory)\Inventories"
-$installDir = "$RootDir\$($config.InstallersDirectory)"
+$invDir = "$($config.BackupRootDirectory)\AppData\Inventories"
+$installDir = "$($config.BackupRootDirectory)\AppData\Installers"
 
 # Use provided InputFile or default to config location
 if ([string]::IsNullOrWhiteSpace($InputFile)) {

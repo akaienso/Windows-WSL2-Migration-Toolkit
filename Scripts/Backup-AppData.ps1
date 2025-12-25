@@ -14,11 +14,11 @@ if (Test-Path $configPath) {
     exit 1
 }
 
-$invDir = "$($config.BackupRootDirectory)\Inventories"
+$invDir = "$($config.BackupRootDirectory)\AppData\Inventories"
 $logDir = "$RootDir\$($config.LogDirectory)"
 $backupRootDirectory = $config.BackupRootDirectory
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$appDataBackupBaseDir = Join-Path $backupRootDirectory "AppData"
+$appDataBackupBaseDir = Join-Path $backupRootDirectory "AppData\Backups"
 $appDataBackupDir = Join-Path $appDataBackupBaseDir $timestamp
 $csvPath = "$invDir\$($config.InventoryInputCSV)"
 $folderMapPath = "$invDir\AppData_Folder_Map.json"
