@@ -70,8 +70,12 @@ if (-not $LatestDotfile) { Write-Error "No dotfile backup created." }
 Write-Host "   -> Found: $LatestDotfile"
 Write-Host "   -> Copying to backup drive..."
 
-# Convert Windows path to WSL mount path
-$wslBackupPath = "/mnt/" + ($BackupDir.Replace(":", "").Replace("\", "/").ToLower())
+# Convert Windows path to WSL mount path properly
+# D:\path\to\dir → /mnt/d/path/to/dir
+$driveLetter = $BackupDir.Substring(0, 1).ToLower()
+$pathWithoutDrive = $BackupDir.Substring(2).Replace("\", "/").ToLower()
+$wslBackupPath = "/mnt/$driveLetter$pathWithoutDrive"
+
 # Create the backup directory in WSL if it doesn't exist
 wsl -d $Distro -- bash -lc "mkdir -p '$wslBackupPath'"
 # Copy the dotfiles to the backup directory
