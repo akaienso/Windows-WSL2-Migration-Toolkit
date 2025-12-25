@@ -69,7 +69,14 @@ if (-not $LatestDotfile) { Write-Error "No dotfile backup created." }
 
 Write-Host "   -> Found: $LatestDotfile"
 Write-Host "   -> Copying to backup drive..."
-wsl -d $Distro -- bash -lc "cp ~/wsl-dotfile-backups/$LatestDotfile /mnt/$(($BackupDir.Replace(':','').Replace('\','/').ToLower()))/"
+
+# Convert Windows path to WSL mount path
+$wslBackupPath = "/mnt/" + ($BackupDir.Replace(":", "").Replace("\", "/").ToLower())
+# Create the backup directory in WSL if it doesn't exist
+wsl -d $Distro -- bash -lc "mkdir -p '$wslBackupPath'"
+# Copy the dotfiles to the backup directory
+wsl -d $Distro -- bash -lc "cp ~/wsl-dotfile-backups/$LatestDotfile '$wslBackupPath/'"
+
 $targetDotfile = Join-Path $BackupDir ("WslDotfiles_{0}.tar.gz" -f $Timestamp)
 Rename-Item (Join-Path $BackupDir $LatestDotfile) -NewName $targetDotfile -Force
 
