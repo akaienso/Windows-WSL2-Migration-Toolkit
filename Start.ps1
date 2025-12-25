@@ -119,7 +119,7 @@ function Validate-WslDistro {
     # If not set, prompt user
     if ([string]::IsNullOrWhiteSpace($distro)) {
         Write-Host "`n⚠ WSL Distro Not Configured" -ForegroundColor Yellow
-        Write-Host "You need to specify which WSL distro to backup/restore.`n" -ForegroundColor Cyan
+        Write-Host "Scanning for installed WSL distros..." -ForegroundColor Cyan
         
         # Try to list available distros from WSL
         $availableDistros = @()
@@ -135,9 +135,13 @@ function Validate-WslDistro {
             # WSL might not be installed
         }
         
-        # Display options
-        if ($availableDistros.Count -gt 0) {
-            Write-Host "Installed WSL Distros:" -ForegroundColor Cyan
+        # If exactly one distro found, use it automatically
+        if ($availableDistros.Count -eq 1) {
+            $distro = $availableDistros[0]
+            Write-Host "✓ Auto-detected distro: $distro" -ForegroundColor Green
+        } elseif ($availableDistros.Count -gt 1) {
+            # Multiple distros - ask user to choose
+            Write-Host "`nInstalled WSL Distros:" -ForegroundColor Cyan
             $i = 1
             foreach ($d in $availableDistros) {
                 if ($d) {  # Only display non-empty entries
@@ -169,9 +173,8 @@ function Validate-WslDistro {
             }
         } else {
             # No distros found, prompt for manual entry
-            Write-Host "No WSL distros detected. Enter your distro name:" -ForegroundColor Yellow
-            Write-Host "Default: Ubuntu" -ForegroundColor DarkGray
-            Write-Host "Distro name: " -ForegroundColor Cyan -NoNewline
+            Write-Host "No WSL distros detected." -ForegroundColor Yellow
+            Write-Host "Enter your distro name (default: Ubuntu): " -ForegroundColor Cyan -NoNewline
             $userInput = Read-Host
             $distro = if ([string]::IsNullOrWhiteSpace($userInput)) { "Ubuntu" } else { $userInput }
         }
