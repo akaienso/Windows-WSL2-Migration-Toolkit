@@ -14,7 +14,7 @@ if (Test-Path $configPath) {
     exit 1
 }
 
-$invDir = "$RootDir\$($config.InventoryDirectory)"
+$invDir = "$($config.BackupRootDirectory)\Inventories"
 $logDir = "$RootDir\$($config.LogDirectory)"
 $backupRootDirectory = $config.BackupRootDirectory
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"

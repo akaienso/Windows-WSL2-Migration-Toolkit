@@ -8,7 +8,7 @@ $configPath = "$RootDir\config.json"
 if (Test-Path $configPath) { $config = Get-Content $configPath -Raw | ConvertFrom-Json } 
 else { Write-Error "Config missing."; exit }
 
-$invDir = "$RootDir\$($config.InventoryDirectory)"
+$invDir = "$($config.BackupRootDirectory)\Inventories"
 $logDir = "$RootDir\$($config.LogDirectory)"
 $csvPath = "$invDir\$($config.InventoryOutputCSV)"
 $wingetJsonPath = "$invDir\winget-apps.json"

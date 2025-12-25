@@ -10,7 +10,7 @@ $RootDir = Split-Path -Parent $ScriptDir
 $configPath = "$RootDir\config.json"
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
 
-$invDir = "$RootDir\$($config.InventoryDirectory)"
+$invDir = "$($config.BackupRootDirectory)\Inventories"
 $installDir = "$RootDir\$($config.InstallersDirectory)"
 
 # Use provided InputFile or default to config location

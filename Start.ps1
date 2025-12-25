@@ -10,7 +10,6 @@ $configPath = "$PSScriptRoot\config.json"
 $defaultConfig = @{
     BasePath            = "." 
     ScriptDirectory     = "Scripts"
-    InventoryDirectory  = "Inventories"
     InstallersDirectory = "Installers"
     LogDirectory        = "Logs"
     BackupRootDirectory = ""
@@ -41,7 +40,6 @@ $currentConfig = Load-Config
 # --- INIT FOLDERS ---
 function Init-Folders {
     $dirs = @(
-        $currentConfig.InventoryDirectory, 
         $currentConfig.LogDirectory, 
         $currentConfig.ScriptDirectory,
         $currentConfig.InstallersDirectory
