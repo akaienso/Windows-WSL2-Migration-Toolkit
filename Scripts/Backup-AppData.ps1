@@ -27,10 +27,11 @@ function Load-Config {
 
 $config = Load-Config
 
-$invDir = "$($config.BackupRootDirectory)\AppData\Inventories"
-$logDir = "$RootDir\$($config.LogDirectory)"
-$backupRootDirectory = $config.BackupRootDirectory
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+$appDataBaseDir = "$($config.BackupRootDirectory)\AppData\$timestamp"
+$invDir = "$appDataBaseDir\Inventories"
+$logDir = "$appDataBaseDir\Logs"
+$backupRootDirectory = $config.BackupRootDirectory
 $appDataBackupBaseDir = Join-Path $backupRootDirectory "AppData\$timestamp\Backups"
 $appDataBackupDir = $appDataBackupBaseDir
 $csvPath = "$invDir\$($config.InventoryInputCSV)"
@@ -42,7 +43,7 @@ if (-not (Test-Path $invDir)) {
     exit 1
 }
 if (-not (Test-Path $logDir)) { 
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null 
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 }
 
 # Setup logging

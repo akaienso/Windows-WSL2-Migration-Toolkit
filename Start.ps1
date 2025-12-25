@@ -49,7 +49,6 @@ $currentConfig = Load-Config
 # --- INIT FOLDERS ---
 function Init-Folders {
     $dirs = @(
-        $currentConfig.LogDirectory, 
         $currentConfig.ScriptDirectory
     )
     foreach ($d in $dirs) {

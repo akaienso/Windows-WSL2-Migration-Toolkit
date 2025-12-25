@@ -30,9 +30,14 @@ $config = Load-Config
 # Source the helper function from Start.ps1
 . "$RootDir\Start.ps1"
 
-$logDir = "$RootDir\$($config.LogDirectory)"
-
 # Find the AppData backup directory
+$appDataBaseDir = Find-BackupDirectory -BackupTypeDir "$($config.BackupRootDirectory)\AppData" -BackupType "AppData"
+$logDir = "$appDataBaseDir\Logs"
+
+# Ensure log directory exists
+if (-not (Test-Path $logDir)) { 
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null 
+}
 $AppDataBaseDir = Join-Path $config.BackupRootDirectory "AppData"
 $BackupDir = Find-BackupDirectory -BackupTypeDir $AppDataBaseDir -BackupType "AppData"
 

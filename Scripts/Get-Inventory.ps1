@@ -27,7 +27,7 @@ $config = Load-Config
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 $appDataBaseDir = "$($config.BackupRootDirectory)\AppData\$timestamp"
 $invDir = "$appDataBaseDir\Inventories"
-$logDir = "$RootDir\$($config.LogDirectory)"
+$logDir = "$appDataBaseDir\Logs"
 $csvPath = "$invDir\$($config.InventoryOutputCSV)"
 $wingetJsonPath = "$invDir\winget-apps.json"
 
