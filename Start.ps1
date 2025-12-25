@@ -96,6 +96,86 @@ function Validate-BackupPath {
 $currentConfig = Load-Config
 Validate-BackupPath ([ref]$currentConfig)
 
+# --- MIGRATE LEGACY FOLDERS ---
+function Migrate-LegacyFolders {
+    <#
+    .SYNOPSIS
+    Detects and migrates user data from old toolkit directory structure
+    to new external backup directory structure.
+    #>
+    param([ref]$config)
+    
+    $migrationTimestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+    $migrated = $false
+    
+    # Check for legacy Inventories folder in toolkit
+    $legacyInvDir = Join-Path $PSScriptRoot "Inventories"
+    if (Test-Path $legacyInvDir) {
+        Write-Host "`n🔄 Migrating legacy Inventories folder..." -ForegroundColor Yellow
+        $newInvDir = Join-Path $config.Value.BackupRootDirectory "AppData\Inventories"
+        New-Item -ItemType Directory -Force -Path $newInvDir | Out-Null
+        
+        Get-ChildItem $legacyInvDir | ForEach-Object {
+            Move-Item -Path $_.FullName -Destination $newInvDir -Force
+            Write-Host "   ✓ Moved: $($_.Name)" -ForegroundColor Green
+        }
+        Remove-Item $legacyInvDir -Force -ErrorAction SilentlyContinue
+        $migrated = $true
+    }
+    
+    # Check for legacy Installers folder in toolkit
+    $legacyInstDir = Join-Path $PSScriptRoot "Installers"
+    if (Test-Path $legacyInstDir) {
+        Write-Host "`n🔄 Migrating legacy Installers folder..." -ForegroundColor Yellow
+        $newInstDir = Join-Path $config.Value.BackupRootDirectory "AppData\Installers"
+        New-Item -ItemType Directory -Force -Path $newInstDir | Out-Null
+        
+        Get-ChildItem $legacyInstDir | ForEach-Object {
+            Move-Item -Path $_.FullName -Destination $newInstDir -Force
+            Write-Host "   ✓ Moved: $($_.Name)" -ForegroundColor Green
+        }
+        Remove-Item $legacyInstDir -Force -ErrorAction SilentlyContinue
+        $migrated = $true
+    }
+    
+    # Check for legacy migration-backups folder in toolkit
+    $legacyBackupDir = Join-Path $PSScriptRoot "migration-backups"
+    if (Test-Path $legacyBackupDir) {
+        Write-Host "`n🔄 Migrating legacy migration-backups folder..." -ForegroundColor Yellow
+        
+        # Move WSL backups
+        $legacyWslDir = Join-Path $legacyBackupDir "WSL"
+        if (Test-Path $legacyWslDir) {
+            $newWslDir = Join-Path $config.Value.BackupRootDirectory "WSL\$migrationTimestamp"
+            New-Item -ItemType Directory -Force -Path $newWslDir | Out-Null
+            Get-ChildItem $legacyWslDir | ForEach-Object {
+                Move-Item -Path $_.FullName -Destination $newWslDir -Force
+                Write-Host "   ✓ Moved WSL backup: $($_.Name)" -ForegroundColor Green
+            }
+        }
+        
+        # Move AppData backups
+        $legacyAppDataDir = Join-Path $legacyBackupDir "AppData_Backups"
+        if (Test-Path $legacyAppDataDir) {
+            $newAppDataDir = Join-Path $config.Value.BackupRootDirectory "AppData\Backups\$migrationTimestamp"
+            New-Item -ItemType Directory -Force -Path $newAppDataDir | Out-Null
+            Get-ChildItem $legacyAppDataDir | ForEach-Object {
+                Move-Item -Path $_.FullName -Destination $newAppDataDir -Force
+                Write-Host "   ✓ Moved AppData backup: $($_.Name)" -ForegroundColor Green
+            }
+        }
+        
+        Remove-Item $legacyBackupDir -Force -Recurse -ErrorAction SilentlyContinue
+        $migrated = $true
+    }
+    
+    if ($migrated) {
+        Write-Host "`n✓ Legacy folder migration complete!" -ForegroundColor Green
+    }
+}
+
+Migrate-LegacyFolders ([ref]$currentConfig)
+
 # --- FIND BACKUP DIRECTORY FOR RESTORE ---
 function Find-BackupDirectory {
     <#
