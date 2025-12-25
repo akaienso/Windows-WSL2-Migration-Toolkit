@@ -7,12 +7,25 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent $ScriptDir
 $configPath = "$RootDir\config.json"
 
-if (Test-Path $configPath) { 
-    $config = Get-Content $configPath -Raw | ConvertFrom-Json 
-} else { 
-    Write-Error "Config missing: $configPath"
-    exit 1
+# Load config (try settings.json first in toolkit root)
+function Load-Config {
+    $settingsPath = "$RootDir\settings.json"
+    
+    # Try settings.json in toolkit root first (persisted user settings)
+    if (Test-Path $settingsPath) {
+        return Get-Content $settingsPath -Raw | ConvertFrom-Json
+    }
+    
+    # Fall back to config.json
+    if (Test-Path $configPath) {
+        return Get-Content $configPath -Raw | ConvertFrom-Json
+    } else {
+        Write-Error "Config missing: $configPath"
+        exit 1
+    }
 }
+
+$config = Load-Config
 
 # Source the helper function from Start.ps1
 . "$RootDir\Start.ps1"

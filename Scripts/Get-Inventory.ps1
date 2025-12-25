@@ -5,16 +5,13 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent $ScriptDir 
 $configPath = "$RootDir\config.json"
 
-# Load config (check for settings.json in backup root first)
+# Load config (check for settings.json in toolkit root first)
 function Load-Config {
-    param([string]$BackupRoot)
+    $settingsPath = "$RootDir\settings.json"
     
-    # Try settings.json if backup root is available
-    if (-not [string]::IsNullOrWhiteSpace($BackupRoot) -and (Test-Path $BackupRoot)) {
-        $settingsPath = Join-Path $BackupRoot "settings.json"
-        if (Test-Path $settingsPath) {
-            return Get-Content $settingsPath -Raw | ConvertFrom-Json
-        }
+    # Try settings.json in toolkit root first (persisted user settings)
+    if (Test-Path $settingsPath) {
+        return Get-Content $settingsPath -Raw | ConvertFrom-Json
     }
     
     # Fall back to config.json

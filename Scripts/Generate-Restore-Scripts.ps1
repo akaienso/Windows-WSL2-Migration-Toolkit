@@ -8,7 +8,26 @@ param(
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent $ScriptDir
 $configPath = "$RootDir\config.json"
-$config = Get-Content $configPath -Raw | ConvertFrom-Json
+
+# Load config (try settings.json first in toolkit root)
+function Load-Config {
+    $settingsPath = "$RootDir\settings.json"
+    
+    # Try settings.json in toolkit root first (persisted user settings)
+    if (Test-Path $settingsPath) {
+        return Get-Content $settingsPath -Raw | ConvertFrom-Json
+    }
+    
+    # Fall back to config.json
+    if (Test-Path $configPath) {
+        return Get-Content $configPath -Raw | ConvertFrom-Json
+    }
+    
+    Write-Error "Config missing."
+    exit 1
+}
+
+$config = Load-Config
 
 # Find the most recent AppData timestamped directory
 $appDataBaseDir = "$($config.BackupRootDirectory)\AppData"

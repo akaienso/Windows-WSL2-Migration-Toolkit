@@ -5,6 +5,7 @@
 $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location -Path $PSScriptRoot
 $configPath = "$PSScriptRoot\config.json"
+$settingsPath = "$PSScriptRoot\settings.json"
 
 # Initialize global variable for backup root (used by Load-Config)
 $global:BackupRootTemp = ""
@@ -22,13 +23,10 @@ $defaultConfig = @{
 
 # --- LOAD / CREATE CONFIG ---
 function Load-Config {
-    # Try settings.json in backup root first (if it exists)
-    if (-not [string]::IsNullOrWhiteSpace($global:BackupRootTemp)) {
-        $settingsPath = Join-Path $global:BackupRootTemp "settings.json"
-        if (Test-Path $settingsPath) {
-            $loaded = Get-Content $settingsPath -Raw | ConvertFrom-Json
-            return $loaded
-        }
+    # Try settings.json in toolkit root first (persisted user settings)
+    if (Test-Path $settingsPath) {
+        $loaded = Get-Content $settingsPath -Raw | ConvertFrom-Json
+        return $loaded
     }
     
     # Fall back to config.json in toolkit (default/template)
@@ -126,10 +124,10 @@ function Validate-WslDistro {
         try {
             $wslOutput = wsl --list --quiet 2>$null
             if ($wslOutput) {
-                # Parse the output - filter out empty lines and Windows system line
-                $availableDistros = @($wslOutput | Where-Object { 
-                    $_ -and $_.Trim() -and $_.Trim() -notmatch "^Windows" 
-                } | ForEach-Object { $_.Trim() })
+                # Split, trim, and keep only lines with actual text (contain at least one letter)
+                $availableDistros = @($wslOutput.Split(@("`r`n", "`n", "`r"), [System.StringSplitOptions]::None) | 
+                    ForEach-Object { $_.Trim() } | 
+                    Where-Object { $_ -match '[a-zA-Z]' })
             }
         } catch {
             # WSL might not be installed
@@ -137,39 +135,29 @@ function Validate-WslDistro {
         
         # If exactly one distro found, use it automatically
         if ($availableDistros.Count -eq 1) {
-            $distro = $availableDistros[0]
+            $distro = $availableDistros[0] -replace '\0', ''  # Strip null bytes
             Write-Host "✓ Auto-detected distro: $distro" -ForegroundColor Green
         } elseif ($availableDistros.Count -gt 1) {
             # Multiple distros - ask user to choose
             Write-Host "`nInstalled WSL Distros:" -ForegroundColor Cyan
-            $i = 1
-            foreach ($d in $availableDistros) {
-                if ($d) {  # Only display non-empty entries
-                    Write-Host "  $i. $d" -ForegroundColor White
-                    $i++
-                }
+            for ($i = 0; $i -lt $availableDistros.Count; $i++) {
+                Write-Host "  $($i + 1). $($availableDistros[$i])" -ForegroundColor White
             }
-            Write-Host "  $i. Other (enter custom distro name)" -ForegroundColor DarkGray
             
-            Write-Host "`nSelect an option (1-$i): " -ForegroundColor Cyan -NoNewline
+            Write-Host "`nSelect a distro (1-$($availableDistros.Count)): " -ForegroundColor Cyan -NoNewline
             $selection = Read-Host
             
             if ($selection -match "^\d+$") {
                 $selNum = [int]$selection
-                if ($selNum -ge 1 -and $selNum -lt $i) {
-                    $distro = $availableDistros[$selNum - 1]
-                } elseif ($selNum -eq $i) {
-                    Write-Host "Enter custom distro name: " -ForegroundColor Cyan -NoNewline
-                    $distro = Read-Host
-                    if ([string]::IsNullOrWhiteSpace($distro)) {
-                        $distro = "Ubuntu"  # Fallback
-                    }
+                if ($selNum -ge 1 -and $selNum -le $availableDistros.Count) {
+                    $distro = $availableDistros[$selNum - 1] -replace '\0', ''  # Strip null bytes
                 } else {
-                    Write-Host "Invalid selection. Using Ubuntu." -ForegroundColor Yellow
-                    $distro = "Ubuntu"
+                    Write-Host "Invalid selection. Using first distro." -ForegroundColor Yellow
+                    $distro = $availableDistros[0] -replace '\0', ''  # Strip null bytes
                 }
             } else {
-                $distro = $selection  # User typed a custom name
+                Write-Host "Invalid input. Using first distro." -ForegroundColor Yellow
+                $distro = $availableDistros[0] -replace '\0', ''  # Strip null bytes
             }
         } else {
             # No distros found - WSL must be installed with at least one distro
@@ -302,8 +290,17 @@ Migrate-LegacyFolders ([ref]$currentConfig)
 function Save-Settings {
     param([ref]$config)
     
-    $settingsPath = Join-Path $config.Value.BackupRootDirectory "settings.json"
-    $config.Value | ConvertTo-Json | Out-File $settingsPath -Encoding UTF8
+    # Sanitize the config: remove any null bytes from string values
+    $cleanConfig = @{}
+    foreach ($key in $config.Value.PSObject.Properties.Name) {
+        $value = $config.Value.$key
+        if ($value -is [string]) {
+            $cleanConfig[$key] = $value -replace '\0', ''
+        } else {
+            $cleanConfig[$key] = $value
+        }
+    }
+    $cleanConfig | ConvertTo-Json | Out-File $settingsPath -Encoding UTF8
 }
 
 Save-Settings ([ref]$currentConfig)

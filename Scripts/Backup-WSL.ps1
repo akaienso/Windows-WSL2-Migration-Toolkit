@@ -5,7 +5,27 @@
 $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent $ScriptDir
-$config = Get-Content "$RootDir\config.json" -Raw | ConvertFrom-Json
+$configPath = "$RootDir\config.json"
+
+# Load config (try settings.json first in toolkit root)
+function Load-Config {
+    $settingsPath = "$RootDir\settings.json"
+    
+    # Try settings.json in toolkit root first (persisted user settings)
+    if (Test-Path $settingsPath) {
+        return Get-Content $settingsPath -Raw | ConvertFrom-Json
+    }
+    
+    # Fall back to config.json
+    if (Test-Path $configPath) {
+        return Get-Content $configPath -Raw | ConvertFrom-Json
+    }
+    
+    Write-Error "Config missing."
+    exit 1
+}
+
+$config = Load-Config
 
 $Distro = $config.WslDistroName
 # Create a timestamp-based subdirectory under WSL backup type
