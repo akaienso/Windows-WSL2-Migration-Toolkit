@@ -172,11 +172,15 @@ function Validate-WslDistro {
                 $distro = $selection  # User typed a custom name
             }
         } else {
-            # No distros found, prompt for manual entry
-            Write-Host "No WSL distros detected." -ForegroundColor Yellow
-            Write-Host "Enter your distro name (default: Ubuntu): " -ForegroundColor Cyan -NoNewline
-            $userInput = Read-Host
-            $distro = if ([string]::IsNullOrWhiteSpace($userInput)) { "Ubuntu" } else { $userInput }
+            # No distros found - WSL must be installed with at least one distro
+            Write-Host "`n✗ No WSL Distros Found" -ForegroundColor Red
+            Write-Host "`nThis toolkit requires Windows Subsystem for Linux (WSL2) with at least one distro installed." -ForegroundColor Yellow
+            Write-Host "`nTo use this toolkit:" -ForegroundColor Cyan
+            Write-Host "  1. Install WSL2: https://docs.microsoft.com/en-us/windows/wsl/install" -ForegroundColor White
+            Write-Host "  2. Install a distro (Ubuntu, Debian, etc.)" -ForegroundColor White
+            Write-Host "  3. Run this toolkit again" -ForegroundColor White
+            Write-Host ""
+            exit 1
         }
         
         # Update config
