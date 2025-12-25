@@ -12,7 +12,7 @@ $defaultConfig = @{
     ScriptDirectory     = "Scripts"
     LogDirectory        = "Logs"
     BackupRootDirectory = ""
-    WslDistroName       = "Ubuntu"
+    WslDistroName       = ""
     InventoryOutputCSV  = "INSTALLED-SOFTWARE-INVENTORY.csv"
     InventoryInputCSV   = "SOFTWARE-INSTALLATION-INVENTORY.csv"
 }
@@ -95,6 +95,85 @@ function Validate-BackupPath {
 
 $currentConfig = Load-Config
 Validate-BackupPath ([ref]$currentConfig)
+
+# --- VALIDATE/SETUP WSL DISTRO ---
+function Validate-WslDistro {
+    param([ref]$config)
+    
+    $distro = $config.Value.WslDistroName
+    
+    # If not set, prompt user
+    if ([string]::IsNullOrWhiteSpace($distro)) {
+        Write-Host "`n⚠ WSL Distro Not Configured" -ForegroundColor Yellow
+        Write-Host "You need to specify which WSL distro to backup/restore.`n" -ForegroundColor Cyan
+        
+        # Try to list available distros
+        $availableDistros = @()
+        try {
+            $wslList = wsl --list --quiet 2>$null
+            if ($wslList) {
+                $availableDistros = $wslList | Where-Object { $_ -and $_ -notmatch "^Windows" } | ForEach-Object { $_.Trim() }
+            }
+        } catch {
+            # WSL might not be installed or no distros available
+        }
+        
+        if ($availableDistros.Count -gt 0) {
+            Write-Host "Available WSL Distros:" -ForegroundColor Cyan
+            $i = 1
+            foreach ($d in $availableDistros) {
+                Write-Host "  $i. $d" -ForegroundColor White
+            }
+            Write-Host "  Enter number or custom distro name: " -ForegroundColor Cyan -NoNewline
+            $selection = Read-Host
+            
+            if ($selection -match "^\d+$" -and [int]$selection -ge 1 -and [int]$selection -le $availableDistros.Count) {
+                $distro = $availableDistros[[int]$selection - 1]
+            } else {
+                $distro = $selection
+            }
+        } else {
+            Write-Host "Default: Ubuntu" -ForegroundColor DarkGray
+            Write-Host "Enter WSL distro name (press Enter for default): " -ForegroundColor Cyan -NoNewline
+            $userInput = Read-Host
+            $distro = if ([string]::IsNullOrWhiteSpace($userInput)) { "Ubuntu" } else { $userInput }
+        }
+        
+        # Update config
+        $config.Value.WslDistroName = $distro
+        $config.Value | ConvertTo-Json | Out-File $configPath -Encoding UTF8
+        Write-Host "✓ WSL Distro set to: $distro" -ForegroundColor Green
+    }
+}
+
+Validate-WslDistro ([ref]$currentConfig)
+
+# --- DISPLAY CONFIGURATION ---
+function Show-Configuration {
+    param([ref]$config)
+    
+    Write-Host "`n╔════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║          CURRENT CONFIGURATION              ║" -ForegroundColor Cyan
+    Write-Host "╚════════════════════════════════════════════╝" -ForegroundColor Cyan
+    
+    Write-Host "`n📁 Backup Location:" -ForegroundColor Cyan
+    Write-Host "   $($config.Value.BackupRootDirectory)" -ForegroundColor White
+    
+    Write-Host "`n🐧 WSL Distro:" -ForegroundColor Cyan
+    Write-Host "   $($config.Value.WslDistroName)" -ForegroundColor White
+    
+    Write-Host "`n📂 Toolkit Directories:" -ForegroundColor Cyan
+    Write-Host "   Scripts:  $($config.Value.ScriptDirectory)" -ForegroundColor DarkGray
+    Write-Host "   Logs:     $($config.Value.LogDirectory)" -ForegroundColor DarkGray
+    
+    Write-Host "`n📋 Inventory Files:" -ForegroundColor Cyan
+    Write-Host "   Output: $($config.Value.InventoryOutputCSV)" -ForegroundColor DarkGray
+    Write-Host "   Input:  $($config.Value.InventoryInputCSV)" -ForegroundColor DarkGray
+    
+    Write-Host ""
+}
+
+Show-Configuration ([ref]$currentConfig)
 
 # --- MIGRATE LEGACY FOLDERS ---
 function Migrate-LegacyFolders {
