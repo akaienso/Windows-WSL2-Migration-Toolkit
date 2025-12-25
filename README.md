@@ -8,8 +8,9 @@
 ## 🚀 Features
 1.  **Windows App Inventory:** Scans Winget, Store, and Registry to build a complete list of your installed software.
 2.  **Restore Generator:** Creates an automated PowerShell script to re-install your Windows apps.
-3.  **WSL System Backup:** Exports your full Linux distro (Ubuntu/Debian) to an external drive.
-4.  **WSL Restore:** Imports your distro backup and automatically fixes permissions and dotfiles.
+3.  **AppData Backup & Restore:** Selectively backup application settings and configuration files to an external drive, then restore them after a fresh install.
+4.  **WSL System Backup:** Exports your full Linux distro (Ubuntu/Debian) to an external drive.
+5.  **WSL Restore:** Imports your distro backup and automatically fixes permissions and dotfiles.
 
 ---
 
@@ -19,13 +20,41 @@
 1.  Run Start.ps1 -> Option 1.
     * Scans your system.
     * Saves CSV to /Inventories/INSTALLED-SOFTWARE-INVENTORY.csv.
+    * Includes two decision columns: `Keep (Y/N)` and `Backup Settings (Y/N)` (both default to FALSE).
+
 2.  **Edit the CSV** (see [CSV Editing Workflow](#-csv-editing-workflow) below).
     * Copy `INSTALLED-SOFTWARE-INVENTORY.csv` → `SOFTWARE-INSTALLATION-INVENTORY.csv` in Inventories folder
     * Upload to Google Sheets (recommended for non-technical users) or edit directly
-    * Set "Keep" to TRUE for apps you want to restore
+    * **Set `Keep (Y/N)` to TRUE** for apps you want to reinstall after a fresh Windows install
+    * **Set `Backup Settings (Y/N)` to TRUE** for apps whose settings/configuration you want to backup (optional but recommended)
     * Export & save back as `SOFTWARE-INSTALLATION-INVENTORY.csv`
+
 3.  Run Start.ps1 -> Option 2.
-    * Generates /Installers/Restore_Windows.ps1.
+    * Generates /Installers/Restore_Windows.ps1 (installs apps marked with `Keep (Y/N)` = TRUE).
+
+
+### Part 1B: Application Settings Backup (Optional)
+If you want to backup application settings (configuration files, preferences, etc.) before a fresh install:
+
+1.  Run Start.ps1 -> Option 5.
+    * Reads `SOFTWARE-INSTALLATION-INVENTORY.csv`
+    * For each app marked with `Backup Settings (Y/N)` = TRUE, searches %APPDATA% and %LOCALAPPDATA%
+    * Uses fuzzy matching on the application name to find config folders
+    * Compresses matching folders into ZIP files with timestamps
+    * Saves to `[ExternalBackupRoot]\AppData_Backups`
+    * Generates detailed log of backed-up folders
+
+2.  After your fresh Windows install, run Start.ps1 -> Option 6.
+    * Reads ZIP files from `[ExternalBackupRoot]\AppData_Backups`
+    * Restores each backup to its original location
+    * Creates timestamped backups of existing data before overwriting
+    * After restore, restart affected applications to reload settings
+
+**⚠️ Important Notes on AppData Backup:**
+- Uses "fuzzy matching" — may miss folders if the app name differs from folder name (e.g., "Mozilla Firefox" vs "Mozilla")
+- Only backs up user-installed Windows applications (skips Store apps and WSL packages)
+- Some applications may require re-authentication or additional configuration after restore
+- This is complementary to app restoration — backup settings independently from reinstalling the app itself
 
 ### Part 2: WSL Environment (Full Backup)
 
@@ -34,24 +63,30 @@
 ## 📋 CSV Editing Workflow
 
 ### Overview
-After running **Option 1 (Get-Inventory)**, you'll have `INSTALLED-SOFTWARE-INVENTORY.csv` in the Inventories folder. Before proceeding to Option 2, you need to:
+After running **Option 1 (Get-Inventory)**, you'll have `INSTALLED-SOFTWARE-INVENTORY.csv` in the Inventories folder with two decision columns:
+- **`Keep (Y/N)`**: Set to TRUE for apps you want to reinstall
+- **`Backup Settings (Y/N)`**: Set to TRUE for apps whose settings you want to backup (optional)
+
+Before proceeding, you need to:
 1. Copy it to `SOFTWARE-INSTALLATION-INVENTORY.csv` (the user-editable input file)
-2. Edit to select which packages to restore
+2. Edit to select which packages to restore and/or backup settings for
 3. Save it back to the Inventories folder
+
 
 ### For Non-Technical Users: Google Sheets Method
 1. Navigate to your Inventories folder
 2. Copy `INSTALLED-SOFTWARE-INVENTORY.csv` to `SOFTWARE-INSTALLATION-INVENTORY.csv`
 3. Open `SOFTWARE-INSTALLATION-INVENTORY.csv`
 4. Go to [sheets.google.com](https://sheets.google.com) → **New** → **Upload file** → Select your CSV
-5. **Optional: Convert Keep column to checkboxes** for easier editing:
-   - Select column G (`Keep (Y/N)`)
+5. **Optional: Convert boolean columns to checkboxes** for easier editing:
+   - Select column G (`Keep (Y/N)`) and optionally column H (`Backup Settings (Y/N)`)
    - Click **Data** → **Data Validation** → Select "Checkbox"
    - Map: Checked = "TRUE", Unchecked = "FALSE"
-6. **Review your packages**:
+6. **Review and mark your packages**:
    - Filter by `Environment` to see Windows apps separately from WSL apps
    - Filter by `Category` to review "System/Driver" items (usually safe to skip)
-   - Check **only** the packages you want to restore
+   - **For app reinstallation**: Check **`Keep (Y/N)`** for apps you want to reinstall after fresh Windows install
+   - **For settings backup**: Check **`Backup Settings (Y/N)`** for apps whose configuration you want to preserve (independent choice — you can keep settings without reinstalling, or vice versa)
 7. **Export & Save**:
    - Click **File** → **Download** → **CSV (.csv, current sheet)**
    - Save as `SOFTWARE-INSTALLATION-INVENTORY.csv`
@@ -60,6 +95,7 @@ After running **Option 1 (Get-Inventory)**, you'll have `INSTALLED-SOFTWARE-INVE
 ### For Technical Users: Direct Edit
 - Open with VS Code or any text editor
 - Edit the `Keep (Y/N)` column to TRUE/FALSE/Yes/No/Y/N/1/0 (case-insensitive)
+- Edit the `Backup Settings (Y/N)` column similarly (optional)
 - Save as UTF-8 (no BOM)
 - Avoid Excel (it may change line endings)
 
@@ -70,6 +106,9 @@ After running **Option 1 (Get-Inventory)**, you'll have `INSTALLED-SOFTWARE-INVE
 - **Line endings**: Keep as LF (`\n`), not CRLF (`\r\n`) — Google Sheets handles this automatically
 - **Registry apps**: Marked "Source: Registry (Manual)" — these cannot be auto-installed and require manual search
 - **Keep column**: Flexible format — accepts TRUE/Yes/Y/1 (checked) or FALSE/No/N/0 (unchecked)
+- **Backup Settings column**: Same flexible format — set TRUE for apps whose configuration you want to preserve
+
+
 
 ---
 

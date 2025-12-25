@@ -110,6 +110,8 @@ function Show-Menu {
     Write-Host "2. Generate Installation Scripts" -ForegroundColor Yellow
     Write-Host "3. Backup WSL System (Full Distro Export)" -ForegroundColor Magenta
     Write-Host "4. Restore WSL System" -ForegroundColor Magenta
+    Write-Host "5. Backup AppData Settings" -ForegroundColor Cyan
+    Write-Host "6. Restore AppData Settings" -ForegroundColor Cyan
     Write-Host "Q. Quit" -ForegroundColor White
     Write-Host "========================================================" -ForegroundColor Cyan
 }
@@ -187,6 +189,22 @@ do {
         "4" {
             Clear-Host; $target = "$scriptPath\Restore-WSL.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
+            Pause
+        }
+        "5" {
+            Clear-Host; $target = "$scriptPath\Backup-AppData.ps1"
+            if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
+            Write-Host "`n✓ AppData backup complete!" -ForegroundColor Green
+            Write-Host "  Backups saved to: $($currentConfig.ExternalBackupRoot)\AppData_Backups" -ForegroundColor Cyan
+            Write-Host "  Review the log file for details on what was backed up." -ForegroundColor Cyan
+            Pause
+        }
+        "6" {
+            Clear-Host; $target = "$scriptPath\Restore-AppData.ps1"
+            if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
+            Write-Host "`n✓ AppData restore complete!" -ForegroundColor Green
+            Write-Host "  Settings have been restored to their original locations." -ForegroundColor Cyan
+            Write-Host "  You may need to restart applications to see the changes." -ForegroundColor Cyan
             Pause
         }
         "Q" { exit }

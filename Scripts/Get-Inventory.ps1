@@ -106,7 +106,7 @@ try {
 
 # EXPORT
 Write-Host "5. Saving CSV... " -NoNewline -ForegroundColor Yellow
-$masterList | Sort-Object Category, Environment, 'Application Name' | Select-Object 'Category', 'Application Name', 'Version', 'Environment', 'Source', 'Restoration Command', @{Name='Keep (Y/N)';Expression={"FALSE"}} | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8 -Force
+$masterList | Sort-Object Category, Environment, 'Application Name' | Select-Object 'Category', 'Application Name', 'Version', 'Environment', 'Source', 'Restoration Command', @{Name='Keep (Y/N)';Expression={"FALSE"}}, @{Name='Backup Settings (Y/N)';Expression={"FALSE"}} | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8 -Force
 Write-Host "Done." -ForegroundColor Green
 
 if (Test-Path $wingetJsonPath) { Remove-Item $wingetJsonPath -Force -ErrorAction SilentlyContinue }

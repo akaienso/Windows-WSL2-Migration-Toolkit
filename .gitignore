@@ -5,6 +5,7 @@ config.json
 Logs/
 Inventories/
 Installers/
+migration-backups/
 
 # Editor Settings
 .vscode/
