@@ -432,7 +432,7 @@ do {
 
     switch ($choice) {
         "1" { 
-            Clear-Host; $target = "$scriptPath\Get-Inventory.ps1"
+            Clear-Host; $target = "$scriptPath\Inventory\Get-Inventory.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Write-Host "`n✓ Inventory complete! Next steps:" -ForegroundColor Green
             Write-Host "  1. Go to Inventories/ folder" -ForegroundColor Cyan
@@ -444,7 +444,7 @@ do {
             Pause
         }
         "2" { 
-            Clear-Host; $target = "$scriptPath\Generate-Restore-Scripts.ps1"
+            Clear-Host; $target = "$scriptPath\Inventory\Generate-Restore-Scripts.ps1"
             $inputFile = "$PSScriptRoot\$($currentConfig.InventoryDirectory)\$($currentConfig.InventoryInputCSV)"
             
             # Check if default file exists
@@ -489,17 +489,17 @@ do {
             Pause
         }
         "3" {
-            Clear-Host; $target = "$scriptPath\Backup-WSL.ps1"
+            Clear-Host; $target = "$scriptPath\WSL\Backup-WSL.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Pause
         }
         "4" {
-            Clear-Host; $target = "$scriptPath\Restore-WSL.ps1"
+            Clear-Host; $target = "$scriptPath\WSL\Restore-WSL.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Pause
         }
         "5" {
-            Clear-Host; $target = "$scriptPath\Backup-AppData.ps1"
+            Clear-Host; $target = "$scriptPath\AppData\Backup-AppData.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Write-Host "`n✓ AppData backup complete!" -ForegroundColor Green
             Write-Host "  Backups saved to: $($currentConfig.ExternalBackupRoot)\AppData_Backups" -ForegroundColor Cyan
@@ -507,7 +507,7 @@ do {
             Pause
         }
         "6" {
-            Clear-Host; $target = "$scriptPath\Restore-AppData.ps1"
+            Clear-Host; $target = "$scriptPath\AppData\Restore-AppData.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Write-Host "`n✓ AppData restore complete!" -ForegroundColor Green
             Write-Host "  Settings have been restored to their original locations." -ForegroundColor Cyan
