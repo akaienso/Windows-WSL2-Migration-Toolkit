@@ -2,7 +2,7 @@
 # SCRIPT: Get-Inventory.ps1
 # ==============================================================================
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$RootDir = Split-Path -Parent $ScriptDir 
+$RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir) 
 $configPath = "$RootDir\config.json"
 
 # Load config (check for settings.json in toolkit root first)

@@ -4,7 +4,7 @@
 # ==============================================================================
 $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$RootDir = Split-Path -Parent $ScriptDir
+$RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 $configPath = "$RootDir\config.json"
 
 # Load config (try settings.json first in toolkit root)
