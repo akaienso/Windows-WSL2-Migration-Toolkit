@@ -2,81 +2,60 @@
 # SCRIPT: Backup-AppData.ps1
 # Purpose: Selectively backup Application Data folders for chosen apps
 # ==============================================================================
+$ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
-$configPath = "$RootDir\config.json"
 
-# Load config (try settings.json first in toolkit root)
-function Load-Config {
-    $settingsPath = "$RootDir\settings.json"
-    
-    # Try settings.json in toolkit root first (persisted user settings)
-    if (Test-Path $settingsPath) {
-        return Get-Content $settingsPath -Raw | ConvertFrom-Json
-    }
-    
-    # Fall back to config.json
-    if (Test-Path $configPath) {
-        return Get-Content $configPath -Raw | ConvertFrom-Json
-    } else {
-        Write-Error "Config missing: $configPath"
+# Import shared utilities
+$utilsPath = Join-Path $RootDir "Scripts\Utils.ps1"
+if (-not (Test-Path $utilsPath)) {
+    Write-Error "Utilities module not found: $utilsPath"
+    exit 1
+}
+. $utilsPath
+
+$config = Load-Config -RootDirectory $RootDir
+
+# Validate required config fields
+@('BackupRootDirectory', 'InventoryInputCSV') | ForEach-Object {
+    if ([string]::IsNullOrWhiteSpace($config.$_)) {
+        Write-Error "Config missing required field: $_"
         exit 1
     }
 }
 
-$config = Load-Config
-
-# Validate backup root
-if ([string]::IsNullOrWhiteSpace($config.BackupRootDirectory)) {
-    Write-Error "BackupRootDirectory not configured. Run Start.ps1 to set it up."
-    exit 1
-}
-
+# Validate backup root exists
 if (-not (Test-Path $config.BackupRootDirectory)) {
     Write-Error "Backup directory does not exist: $($config.BackupRootDirectory)"
+    Write-Host "Run Start.ps1 to create and configure the backup directory." -ForegroundColor Cyan
     exit 1
 }
 
 # Find the most recent timestamped Inventory directory
-$invBaseDir = "$($config.BackupRootDirectory)\Inventory"
-$latestInvDir = Get-ChildItem -Path $invBaseDir -Directory -ErrorAction SilentlyContinue | 
-                Sort-Object LastWriteTime -Descending | 
-                Select-Object -First 1
-
+$invBaseDir = Join-Path $config.BackupRootDirectory "Inventory"
+$latestInvDir = Find-LatestBackupDir -BackupBaseDir $invBaseDir -BackupType "Inventory"
 if (-not $latestInvDir) {
-    Write-Error "No inventory directory found in: $invBaseDir`nRun Option 1 (Get-Inventory) first."
     exit 1
 }
 
 # Use the inventory timestamp to organize ApplicationData backup in parallel structure
 $invTimestamp = $latestInvDir.Name
-$appDataBaseDir = "$($config.BackupRootDirectory)\ApplicationData"
-$invDir = "$($latestInvDir.FullName)\Inventories"
-$logDir = "$appDataBaseDir\$invTimestamp\Logs"
-$appDataBackupDir = "$appDataBaseDir\$invTimestamp\Backups"
-$csvPath = "$invDir\$($config.InventoryInputCSV)"
-$folderMapPath = "$invDir\AppData_Folder_Map.json"
+$appDataBaseDir = Join-Path $config.BackupRootDirectory "ApplicationData"
+$invDir = Join-Path $latestInvDir.FullName "Inventories"
+$logDir = Join-Path $appDataBaseDir $invTimestamp "Logs"
+$appDataBackupDir = Join-Path $appDataBaseDir $invTimestamp "Backups"
+$csvPath = Join-Path $invDir $config.InventoryInputCSV
+$folderMapPath = Join-Path $invDir "AppData_Folder_Map.json"
 
 # Ensure directories exist
-if (-not (Test-Path $invDir)) { 
-    Write-Error "Inventory directory not found: $invDir"
+if (-not (New-DirectoryIfNotExists -Path $logDir) -or -not (New-DirectoryIfNotExists -Path $appDataBackupDir)) {
+    Write-Error "Failed to create required backup directories"
     exit 1
 }
 
-try {
-    if (-not (Test-Path $logDir)) { 
-        New-Item -ItemType Directory -Force -Path $logDir | Out-Null 
-    }
-} catch {
-    Write-Error "Failed to create log directory: $_"
-    exit 1
-}
-
-# Setup logging
-$logTimestamp = Get-Date -Format "yyyyMMdd_HHmm"
-$logFile = "$logDir\AppData_Backup_$logTimestamp.txt"
-Start-Transcript -Path $logFile -Append | Out-Null
+# Start logging
+$logFile = Start-ScriptLogging -LogDirectory $logDir -ScriptName "AppData_Backup"
 
 Write-Host "`n=== STARTING APPDATA BACKUP ===" -ForegroundColor Cyan
 Write-Host "CSV: $csvPath" -ForegroundColor DarkGray
@@ -120,21 +99,12 @@ if (-not (Test-Path $appDataBackupDir)) {
 }
 
 # Load or create folder mapping
-$folderMap = @{}
-if (Test-Path $folderMapPath) {
-    try {
-        $folderMap = Get-Content $folderMapPath -Raw | ConvertFrom-Json | ConvertTo-Hashtable
-    } catch {
-        Write-Host "⚠ Warning: Failed to load folder map file, will create fresh mapping: $_" -ForegroundColor Yellow
-        $folderMap = @{}
-    }
-}
+$folderMap = Load-JsonFile -FilePath $folderMapPath
 
-# Validate CSV exists
-if (-not (Test-Path $csvPath)) {
-    Write-Error "Input CSV not found: $csvPath"
-    Write-Host "Please run Option 1 to generate inventory, then set Backup Settings to TRUE in the CSV." -ForegroundColor Yellow
-    Stop-Transcript | Out-Null
+# Validate CSV exists and has required columns
+if (-not (Test-CsvFile -CsvPath $csvPath -RequiredColumns @('Backup Settings (Y/N)', 'Application Name', 'Environment', 'Source'))) {
+    Write-Host "Please run Option 1 to generate inventory, then set 'Backup Settings (Y/N)' to TRUE for apps to backup." -ForegroundColor Yellow
+    Stop-ScriptLogging
     exit 1
 }
 
@@ -290,10 +260,11 @@ function Save-FolderMapping {
         [string]$FilePath
     )
     
-    try {
-        $Map | ConvertTo-Json | Out-File -FilePath $FilePath -Encoding UTF8 -Force -ErrorAction Stop
-    } catch {
-        Write-Host "⚠ Warning: Failed to save folder mapping file: $_" -ForegroundColor Yellow
+    if (Save-JsonFile -Data $Map -FilePath $FilePath) {
+        return $true
+    } else {
+        Write-Host "⚠ Warning: Failed to save folder mapping" -ForegroundColor Yellow
+        return $false
     }
 }
 
@@ -392,9 +363,9 @@ foreach ($row in $inventory) {
             }
             
             if ($folderPath -and (Test-Path $folderPath)) {
-                $safeAppName = $appName -replace '[\\/:*?"<>|]', '_'
+                $safeAppName = Get-SafeFilename -Filename $appName
                 $zipFileName = "$safeAppName`_$(Get-Date -Format 'yyyyMMdd_HHmmss').zip"
-                $zipPath = "$appDataBackupDir\$zipFileName"
+                $zipPath = Join-Path $appDataBackupDir $zipFileName
                 
                 try {
                     Write-Host "  → Compressing: $folderPath" -ForegroundColor Cyan
@@ -405,8 +376,9 @@ foreach ($row in $inventory) {
                         Write-Host "  ✗ Backup failed: Archive file was not created" -ForegroundColor Red
                         $errorCount++
                     } else {
-                        $zipSize = (Get-Item $zipPath).Length / 1MB
-                        Write-Host "  ✓ Backup complete: $zipFileName ($([Math]::Round($zipSize, 2)) MB)" -ForegroundColor Green
+                        $zipSize = (Get-Item $zipPath).Length
+                        $zipSizeFormatted = Format-ByteSize -Bytes $zipSize
+                        Write-Host "  ✓ Backup complete: $zipFileName ($zipSizeFormatted)" -ForegroundColor Green
                         $backupCount++
                     }
                 } catch {
@@ -442,5 +414,5 @@ Write-Host "  • Future backups will use these stored mappings automatically" -
 Write-Host "  • To reset a mapping, delete it from the JSON file and re-run backup" -ForegroundColor Yellow
 Write-Host "  • Some apps may require re-authentication or reconfiguration after restore" -ForegroundColor Yellow
 
-Stop-Transcript | Out-Null
+Stop-ScriptLogging
 

@@ -1,54 +1,58 @@
 # ==============================================================================
 # SCRIPT: Backup-WSL.ps1
-# PURPOSE: Exports Full WSL Distro to External Drive
+# PURPOSE: Exports Full WSL Distro to External Drive with Dotfiles
 # ==============================================================================
 $ErrorActionPreference = 'Stop'
+
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
-$configPath = "$RootDir\config.json"
 
-# Load config (try settings.json first in toolkit root)
-function Load-Config {
-    $settingsPath = "$RootDir\settings.json"
-    
-    # Try settings.json in toolkit root first (persisted user settings)
-    if (Test-Path $settingsPath) {
-        return Get-Content $settingsPath -Raw | ConvertFrom-Json
+# Import shared utilities
+$utilsPath = Join-Path $RootDir "Scripts\Utils.ps1"
+if (-not (Test-Path $utilsPath)) {
+    Write-Error "Utilities module not found: $utilsPath"
+    exit 1
+}
+. $utilsPath
+
+$config = Load-Config -RootDirectory $RootDir
+
+# Validate required config fields
+@('BackupRootDirectory', 'WslDistroName') | ForEach-Object {
+    if ([string]::IsNullOrWhiteSpace($config.$_)) {
+        Write-Error "Config missing required field: $_"
+        exit 1
     }
-    
-    # Fall back to config.json
-    if (Test-Path $configPath) {
-        return Get-Content $configPath -Raw | ConvertFrom-Json
-    }
-    
-    Write-Error "Config missing."
+}
+
+$Distro = $config.WslDistroName
+
+# Validate distro exists
+if (-not (Test-WslDistro -Distro $Distro)) {
+    Write-Error "WSL Distro '$Distro' not found or WSL is not installed"
     exit 1
 }
 
-$config = Load-Config
-
-$Distro = $config.WslDistroName
-# Create a timestamp-based subdirectory under WSL backup type
+# Create timestamped backup directory
 $Timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 $WslBackupBaseDir = Join-Path $config.BackupRootDirectory "WSL"
 $BackupDir = Join-Path $WslBackupBaseDir $Timestamp
-$WslScriptsDir = "$RootDir\Scripts\WSL"
+$WslScriptsDir = Join-Path $RootDir "Scripts\WSL"
 
 Write-Host "`n=== WSL SYSTEM BACKUP ===" -ForegroundColor Cyan
-Write-Host "Distro: $Distro"
-Write-Host "Backup Root: $($config.BackupRootDirectory)"
+Write-Host "Distro: $Distro" -ForegroundColor Yellow
+Write-Host "Backup Root: $($config.BackupRootDirectory)" -ForegroundColor Yellow
+Write-Host "Backup Target: $BackupDir" -ForegroundColor Yellow
 
-# Validate distro exists
-$allDistros = wsl -l --quiet | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-$distroExists = $allDistros | Where-Object { $_ -eq $Distro }
-
-if (-not $distroExists) {
-    Write-Error "WSL Distro '$Distro' not found. Available distros: $($allDistros -join ', ')"
+# Create backup directory
+if (-not (New-DirectoryIfNotExists -Path $BackupDir)) {
+    Write-Error "Failed to create backup directory: $BackupDir"
     exit 1
 }
 
-# --- CHECK FOR EXISTING WSL BACKUPS ---
-$existingBackups = @(Get-ChildItem -Path $WslBackupBaseDir -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+# Check for existing WSL backups
+$existingBackups = @(Get-ChildItem -Path $WslBackupBaseDir -Directory -ErrorAction SilentlyContinue | 
+                     Sort-Object LastWriteTime -Descending)
 
 if ($existingBackups.Count -gt 0) {
     Write-Host "`n⚠ Found $($existingBackups.Count) existing WSL backup(s):" -ForegroundColor Yellow
@@ -59,8 +63,8 @@ if ($existingBackups.Count -gt 0) {
         Write-Host "   ... and $($existingBackups.Count - 5) more" -ForegroundColor DarkGray
     }
     
-    Write-Host "`n❓ Replace existing WSL backups with a new one?" -ForegroundColor Cyan
-    Write-Host "   Note: This will DELETE all existing WSL backups and create a fresh backup with current timestamp." -ForegroundColor DarkGray
+    Write-Host "`n❓ Delete existing WSL backups and create a new one?" -ForegroundColor Cyan
+    Write-Host "   (Creating in separate directory if you choose No)" -ForegroundColor DarkGray
     Write-Host "   Yes (Y) / No (N): " -ForegroundColor Cyan -NoNewline
     $response = Read-Host
     
@@ -76,62 +80,55 @@ if ($existingBackups.Count -gt 0) {
     }
 }
 
-Write-Host "`nTarget: $BackupDir"
-
-if (-not (Test-Path $BackupDir)) {
-    Write-Host "Creating backup directory: $BackupDir" -ForegroundColor Yellow
-    New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
-}
-
 # 1. Inject Toolkit into WSL
 Write-Host "`n1. Injecting helper scripts into ~/.wsl-toolkit..." -ForegroundColor Cyan
-# Convert Scripts/WSL path to WSL mount path
-$wslScriptsDrive = $WslScriptsDir.Substring(0, 1).ToLower()
-$wslScriptsPath = $WslScriptsDir.Substring(2).Replace("\", "/").ToLower()
-$wslPath = "/mnt/$wslScriptsDrive$wslScriptsPath"
-$deployCmd = "mkdir -p ~/.wsl-toolkit && cp $wslPath/*.sh ~/.wsl-toolkit/ && chmod +x ~/.wsl-toolkit/*.sh"
+$wslPath = ConvertTo-WslPath -WindowsPath $WslScriptsDir
+if (-not $wslPath) {
+    Write-Error "Failed to convert script path to WSL format"
+    exit 1
+}
 
-wsl -d $Distro -- bash -lc $deployCmd
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed to inject toolkit scripts into WSL. Verify the distro is running and the path exists: $wslPath"
+$deployCmd = "mkdir -p ~/.wsl-toolkit && cp $wslPath/*.sh ~/.wsl-toolkit/ && chmod +x ~/.wsl-toolkit/*.sh"
+if (-not (Invoke-WslCommand -Distro $Distro -Command $deployCmd)) {
+    Write-Error "Failed to inject toolkit scripts into WSL"
     exit 1
 }
 
 # 2. Run Dotfile Backup
 Write-Host "2. Running dotfile backup inside WSL..." -ForegroundColor Cyan
-wsl -d $Distro -- bash -lc "~/.wsl-toolkit/backup-dotfiles.sh"
-if ($LASTEXITCODE -ne 0) {
+if (-not (Invoke-WslCommand -Distro $Distro -Command "~/.wsl-toolkit/backup-dotfiles.sh")) {
     Write-Error "Dotfile backup script failed"
     exit 1
 }
 
-$LatestDotfile = wsl -d $Distro -- bash -lc "ls -t ~/wsl-dotfile-backups 2>/dev/null | head -n 1" | Out-String
+$LatestDotfile = wsl -d $Distro -- bash -lc "ls -t ~/wsl-dotfile-backups 2>/dev/null | head -n 1" 2>$null | Out-String
 $LatestDotfile = $LatestDotfile.Trim()
 if (-not $LatestDotfile) { 
-    Write-Error "No dotfile backup created. Check that ~/wsl-dotfile-backups/ exists in the distro."
+    Write-Error "No dotfile backup created. Check that ~/.wsl-dotfile-backups exists in the distro."
     exit 1
 }
 
-Write-Host "   -> Found: $LatestDotfile"
+Write-Host "   -> Found: $LatestDotfile" -ForegroundColor Green
 Write-Host "   -> Copying to backup drive..."
 
 # Convert Windows path to WSL mount path properly
-# D:\path\to\dir → /mnt/d/path/to/dir
-$driveLetter = $BackupDir.Substring(0, 1).ToLower()
-$pathWithoutDrive = $BackupDir.Substring(2).Replace("\", "/").ToLower()
-$wslBackupPath = "/mnt/$driveLetter$pathWithoutDrive"
+$wslBackupPath = ConvertTo-WslPath -WindowsPath $BackupDir
+if (-not $wslBackupPath) {
+    Write-Error "Failed to convert backup path to WSL format"
+    exit 1
+}
 
 # Create the backup directory in WSL if it doesn't exist
-wsl -d $Distro -- bash -lc "mkdir -p '$wslBackupPath'"
-if ($LASTEXITCODE -ne 0) {
+$createDirCmd = "mkdir -p '$wslBackupPath'"
+if (-not (Invoke-WslCommand -Distro $Distro -Command $createDirCmd)) {
     Write-Error "Failed to create backup directory in WSL: $wslBackupPath"
     exit 1
 }
 
 # Copy the dotfiles to the backup directory with renamed filename
 $targetDotfile = "WslDotfiles_{0}.tar.gz" -f $Timestamp
-wsl -d $Distro -- bash -lc "cp ~/wsl-dotfile-backups/$LatestDotfile '$wslBackupPath/$targetDotfile'"
-if ($LASTEXITCODE -ne 0) {
+$copyCmd = "cp ~/wsl-dotfile-backups/$LatestDotfile '$wslBackupPath/$targetDotfile'"
+if (-not (Invoke-WslCommand -Distro $Distro -Command $copyCmd)) {
     Write-Error "Failed to copy dotfile backup to: $wslBackupPath/$targetDotfile"
     exit 1
 }
@@ -178,4 +175,12 @@ $report = "WSL Backup Report ($Timestamp)`n---------------------------`nFull: $(
 $report | Out-File (Join-Path $BackupDir "HashReport_$Timestamp.txt")
 
 Write-Host "`nSUCCESS! Backup Complete." -ForegroundColor Green
-Write-Host "Location: $BackupDir"
+Write-Host "Location: $BackupDir" -ForegroundColor Cyan
+Write-Host "`nBackup Contents:" -ForegroundColor Yellow
+Write-Host "  • Full distro: $FullExportFile" -ForegroundColor White
+Write-Host "  • Dotfiles: $targetDotfile" -ForegroundColor White
+Write-Host "  • Hash report: HashReport_$Timestamp.txt" -ForegroundColor White
+Write-Host "`nNext Steps:" -ForegroundColor Cyan
+Write-Host "  1. Verify backup integrity using hash report" -ForegroundColor White
+Write-Host "  2. Keep backup on safe external storage" -ForegroundColor White
+Write-Host "  3. After clean Windows install, run Option 4 (Restore-WSL) to restore" -ForegroundColor White

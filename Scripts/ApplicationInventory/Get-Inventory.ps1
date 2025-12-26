@@ -1,42 +1,46 @@
 # ==============================================================================
 # SCRIPT: Get-Inventory.ps1
+# Purpose: Scan Windows and WSL applications and generate inventory CSV
 # ==============================================================================
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir) 
-$configPath = "$RootDir\config.json"
+$ErrorActionPreference = 'Stop'
 
-# Load config (check for settings.json in toolkit root first)
-function Load-Config {
-    $settingsPath = "$RootDir\settings.json"
-    
-    # Try settings.json in toolkit root first (persisted user settings)
-    if (Test-Path $settingsPath) {
-        return Get-Content $settingsPath -Raw | ConvertFrom-Json
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
+
+# Import shared utilities
+$utilsPath = Join-Path $RootDir "Scripts\Utils.ps1"
+if (-not (Test-Path $utilsPath)) {
+    Write-Error "Utilities module not found: $utilsPath"
+    exit 1
+}
+. $utilsPath
+
+$config = Load-Config -RootDirectory $RootDir
+
+# Validate required config fields
+@('BackupRootDirectory', 'InventoryOutputCSV') | ForEach-Object {
+    if ([string]::IsNullOrWhiteSpace($config.$_)) {
+        Write-Error "Config missing required field: $_"
+        exit 1
     }
-    
-    # Fall back to config.json
-    if (Test-Path $configPath) {
-        return Get-Content $configPath -Raw | ConvertFrom-Json
-    }
-    Write-Error "Config missing."
+}
+
+# Create timestamped inventory directory structure
+$timestampDir = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+$invDir = Join-Path $config.BackupRootDirectory "Inventory\$timestampDir\Inventories"
+$logDir = Join-Path $config.BackupRootDirectory "Inventory\$timestampDir\Logs"
+$csvPath = Join-Path $invDir $config.InventoryOutputCSV
+$wingetJsonPath = Join-Path $invDir "winget-apps.json"
+
+# Ensure directories exist
+if (-not (New-DirectoryIfNotExists -Path $invDir) -or -not (New-DirectoryIfNotExists -Path $logDir)) {
+    Write-Error "Failed to create required directories"
     exit 1
 }
 
-$config = Load-Config
-
-# Save inventory to timestamped directory (where it's created during inventory scan)
-$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$timestampDir = "$($config.BackupRootDirectory)\Inventory\$timestamp"
-$invDir = "$timestampDir\Inventories"
-$logDir = "$timestampDir\Logs"
-$csvPath = "$invDir\$($config.InventoryOutputCSV)"
-$wingetJsonPath = "$invDir\winget-apps.json"
-
-if (-not (Test-Path $invDir)) { New-Item -ItemType Directory -Force -Path $invDir | Out-Null }
-if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Force -Path $logDir | Out-Null }
-
-$timestamp = Get-Date -Format "yyyyMMdd_HHmm"
-Start-Transcript -Path "$logDir\Inventory_Log_$timestamp.txt" -Append | Out-Null
+# Start logging
+$logTimestamp = Get-Date -Format "yyyyMMdd_HHmm"
+$logFile = Start-ScriptLogging -LogDirectory $logDir -ScriptName "Inventory"
 
 Write-Host "`n=== STARTING APP INVENTORY SCAN ===" -ForegroundColor Cyan
 
@@ -99,6 +103,13 @@ foreach ($loc in $registryLocations) {
         $entries = Get-ItemProperty $loc -ErrorAction Stop
         foreach ($app in $entries) {
             if (-not [string]::IsNullOrWhiteSpace($app.DisplayName) -and -not $knownApps.ContainsKey($app.DisplayName)) {
+                # Skip system components and entries without uninstall string
+                if ($app.PSObject.Properties['SystemComponent'] -and $app.SystemComponent -eq 1) {
+                    continue
+                }
+                if ([string]::IsNullOrWhiteSpace($app.UninstallString)) {
+                    continue
+                }
                 $cat = Get-AppCategory -name $app.DisplayName -env "Windows"
                 $masterList += [PSCustomObject]@{ 'Category' = $cat; 'Application Name' = $app.DisplayName; 'Version' = $app.DisplayVersion; 'Environment' = "Windows"; 'Source' = "Registry (Manual)"; 'Restoration Command' = "winget search `"$($app.DisplayName)`"" }
             }
@@ -138,5 +149,6 @@ try {
 }
 
 if (Test-Path $wingetJsonPath) { Remove-Item $wingetJsonPath -Force -ErrorAction SilentlyContinue }
-Stop-Transcript | Out-Null
+Stop-ScriptLogging
 Write-Host "`nSUCCESS! Inventory saved to: $csvPath" -ForegroundColor Green
+Write-Host "Log file: $logFile" -ForegroundColor DarkGray

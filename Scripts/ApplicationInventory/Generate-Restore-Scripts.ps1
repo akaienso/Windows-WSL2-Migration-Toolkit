@@ -1,80 +1,96 @@
 # ==============================================================================
 # SCRIPT: Generate-Restore-Scripts.ps1
+# Purpose: Read inventory CSV and generate restore scripts for Windows and Linux
 # ==============================================================================
+$ErrorActionPreference = 'Stop'
+
 param(
     [string]$InputFile = ""
 )
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
-$configPath = "$RootDir\config.json"
 
-# Load config (try settings.json first in toolkit root)
-function Load-Config {
-    $settingsPath = "$RootDir\settings.json"
-    
-    # Try settings.json in toolkit root first (persisted user settings)
-    if (Test-Path $settingsPath) {
-        return Get-Content $settingsPath -Raw | ConvertFrom-Json
-    }
-    
-    # Fall back to config.json
-    if (Test-Path $configPath) {
-        return Get-Content $configPath -Raw | ConvertFrom-Json
-    }
-    
-    Write-Error "Config missing."
+# Import shared utilities
+$utilsPath = Join-Path $RootDir "Scripts\Utils.ps1"
+if (-not (Test-Path $utilsPath)) {
+    Write-Error "Utilities module not found: $utilsPath"
     exit 1
 }
+. $utilsPath
 
-$config = Load-Config
+$config = Load-Config -RootDirectory $RootDir
 
-# Use provided InputFile, or find the most recent timestamped inventory
+# Validate required config fields
+@('BackupRootDirectory', 'InventoryInputCSV', 'InventoryOutputCSV') | ForEach-Object {
+    if ([string]::IsNullOrWhiteSpace($config.$_)) {
+        Write-Error "Config missing required field: $_"
+        exit 1
+    }
+}
+
+# Determine input CSV path
 if ([string]::IsNullOrWhiteSpace($InputFile)) {
     # Find the most recent Inventory timestamped directory
-    $invBaseDir = "$($config.BackupRootDirectory)\Inventory"
-    $latestDir = Get-ChildItem -Path $invBaseDir -Directory -ErrorAction SilentlyContinue | 
-                 Sort-Object LastWriteTime -Descending | 
-                 Select-Object -First 1
+    $invBaseDir = Join-Path $config.BackupRootDirectory "Inventory"
     
-    if (-not $latestDir) {
-        Write-Host "`n⚠ INPUT FILE NOT FOUND" -ForegroundColor Yellow
-        Write-Host "Expected: $invBaseDir\[timestamp]\Inventories\$($config.InventoryInputCSV)" -ForegroundColor Red
-        Write-Host "`nNo inventory directories found." -ForegroundColor Red
+    if (-not (Test-Path $invBaseDir)) {
+        Write-Error "Inventory directory not found: $invBaseDir"
         Write-Host "Run Option 1 (Get-Inventory) first to generate one." -ForegroundColor Cyan
         exit 1
     }
     
-    $csvPath = "$($latestDir.FullName)\Inventories\$($config.InventoryInputCSV)"
-    $installDir = "$($latestDir.FullName)\Installers"
+    $latestDir = Find-LatestBackupDir -BackupBaseDir $invBaseDir -BackupType "Inventory"
+    if (-not $latestDir) {
+        exit 1
+    }
+    
+    $csvPath = Join-Path $latestDir.FullName "Inventories" $config.InventoryInputCSV
+    $installDir = Join-Path $latestDir.FullName "Installers"
 } else {
+    # Custom InputFile path
+    if (-not (Test-Path $InputFile)) {
+        Write-Error "Input file not found: $InputFile"
+        exit 1
+    }
     $csvPath = $InputFile
-    # When using custom InputFile, put scripts in the same timestamped directory as the CSV
+    # Put scripts in same directory structure as the CSV
     $timestampDir = Split-Path -Parent (Split-Path -Parent $InputFile)
-    $installDir = "$timestampDir\Installers"
+    $installDir = Join-Path $timestampDir "Installers"
 }
 
 # Validate input CSV exists
 if (-not (Test-Path $csvPath)) {
-    Write-Error "Inventory CSV not found: $csvPath"
-    exit 1
-}
-
-# Create installer directory
-if (-not (Test-Path $installDir)) {
-    try {
-        New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-    } catch {
-        Write-Error "Failed to create installer directory: $_"
+    Write-Host "Input CSV not found: $csvPath" -ForegroundColor Yellow
+    Write-Host "Checking for output CSV to create input from..." -ForegroundColor Yellow
+    
+    # Try to use output CSV as fallback
+    $outputCsvPath = Join-Path (Split-Path -Parent $csvPath) $config.InventoryOutputCSV
+    if (Test-Path $outputCsvPath) {
+        Write-Host "Creating input CSV from output CSV..." -ForegroundColor Yellow
+        Copy-Item -Path $outputCsvPath -Destination $csvPath -Force
+        Write-Host "Created: $csvPath" -ForegroundColor Green
+    } else {
+        Write-Error "Neither input nor output CSV found. Run Option 1 (Get-Inventory) first."
         exit 1
     }
 }
 
-$winScriptPath = "$installDir\Restore_Windows.ps1"
-$linuxScriptPath = "$installDir\Restore_Linux.sh"
+# Validate CSV format
+if (-not (Test-CsvFile -CsvPath $csvPath -RequiredColumns @('Keep (Y/N)', 'Restoration Command', 'Environment'))) {
+    exit 1
+}
 
-if (-not (Test-Path $installDir)) { New-Item -ItemType Directory -Force -Path $installDir | Out-Null }
-if (-not (Test-Path $csvPath)) { Write-Error "Input file missing: $csvPath"; exit }
+# Create installer directory
+if (-not (New-DirectoryIfNotExists -Path $installDir)) {
+    Write-Error "Failed to create installer directory"
+    exit 1
+}
+
+$winScriptPath = Join-Path $installDir "Restore_Windows.ps1"
+$linuxScriptPath = Join-Path $installDir "Restore_Linux.sh"
+
+Write-Host "`nReading inventory: $csvPath" -ForegroundColor Cyan
 
 $inventory = Import-Csv -Path $csvPath
 $winCommands = @(); $linuxCommands = @(); $manualWarnings = @()
@@ -117,4 +133,10 @@ $linuxContent += "`n`necho 'Done!'"
 $linuxContent = $linuxContent -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText($linuxScriptPath, $linuxContent)
 
-Write-Host "SUCCESS! Scripts created in '$($config.InstallersDirectory)'" -ForegroundColor Green
+Write-Host "✓ Restore scripts generated successfully!" -ForegroundColor Green
+Write-Host "Windows script: $winScriptPath" -ForegroundColor Cyan
+Write-Host "Linux script:   $linuxScriptPath" -ForegroundColor Cyan
+Write-Host "`nNext steps:" -ForegroundColor Yellow
+Write-Host "  1. Review the scripts before running" -ForegroundColor White
+Write-Host "  2. Run Restore_Windows.ps1 after fresh Windows install" -ForegroundColor White
+Write-Host "  3. Run Restore_Linux.sh in WSL after distro restore" -ForegroundColor White

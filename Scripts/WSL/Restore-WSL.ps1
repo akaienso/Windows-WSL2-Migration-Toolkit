@@ -3,50 +3,87 @@
 # PURPOSE: Imports Full WSL Distro from External Drive
 # ==============================================================================
 $ErrorActionPreference = 'Stop'
+
+# ===== HELPER FUNCTIONS: Define before main execution =====
+
+# Find backup directory with user selection
+function Find-BackupDirectory {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$BackupTypeDir,
+        
+        [string]$BackupType = "Backup"
+    )
+    
+    if (-not (Test-Path $BackupTypeDir)) {
+        Write-Error "Backup directory not found: $BackupTypeDir"
+        return $null
+    }
+    
+    # Get all backup directories
+    $backupDirs = @(Get-ChildItem -Path $BackupTypeDir -Directory -ErrorAction SilentlyContinue | 
+                    Sort-Object LastWriteTime -Descending)
+    
+    if ($backupDirs.Count -eq 0) {
+        Write-Error "No $BackupType directories found in: $BackupTypeDir"
+        return $null
+    }
+    
+    # If only one, use it
+    if ($backupDirs.Count -eq 1) {
+        return $backupDirs[0]
+    }
+    
+    # Multiple backups - let user choose
+    Write-Host "`nFound multiple $BackupType backups:" -ForegroundColor Yellow
+    for ($i = 0; $i -lt $backupDirs.Count; $i++) {
+        $size = (Get-ChildItem $backupDirs[$i].FullName -Recurse | Measure-Object -Property Length -Sum).Sum
+        $sizeGB = [Math]::Round($size / 1GB, 2)
+        Write-Host "  $($i + 1). $($backupDirs[$i].Name) (~$sizeGB GB)" -ForegroundColor Cyan
+    }
+    
+    $selection = Read-Host "`nSelect backup (1-$($backupDirs.Count))"
+    $index = [int]$selection - 1
+    
+    if ($index -ge 0 -and $index -lt $backupDirs.Count) {
+        return $backupDirs[$index]
+    }
+    
+    Write-Error "Invalid selection"
+    return $null
+}
+
+# ===== MAIN SCRIPT =====
+
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
-$configPath = "$RootDir\config.json"
 
-# Load config (try settings.json first in toolkit root)
-function Load-Config {
-    $settingsPath = "$RootDir\settings.json"
-    
-    # Try settings.json in toolkit root first (persisted user settings)
-    if (Test-Path $settingsPath) {
-        return Get-Content $settingsPath -Raw | ConvertFrom-Json
+# Import shared utilities
+$utilsPath = Join-Path $RootDir "Scripts\Utils.ps1"
+if (-not (Test-Path $utilsPath)) {
+    Write-Error "Utilities module not found: $utilsPath"
+    exit 1
+}
+. $utilsPath
+
+$config = Load-Config -RootDirectory $RootDir
+
+# Validate required config fields
+@('WslDistroName', 'BackupRootDirectory') | ForEach-Object {
+    if ([string]::IsNullOrWhiteSpace($config.$_)) {
+        Write-Error "Config missing required field: $_"
+        exit 1
     }
-    
-    # Fall back to config.json
-    if (Test-Path $configPath) {
-        return Get-Content $configPath -Raw | ConvertFrom-Json
-    }
-    
-    Write-Error "Config missing."
-    exit 1
 }
 
-$config = Load-Config
-
-# Validate config
-if ([string]::IsNullOrWhiteSpace($config.WslDistroName)) {
-    Write-Error "WslDistroName not configured. Run Start.ps1 to set it up."
-    exit 1
-}
-
-if ([string]::IsNullOrWhiteSpace($config.BackupRootDirectory)) {
-    Write-Error "BackupRootDirectory not configured. Run Start.ps1 to set it up."
-    exit 1
-}
-
+# Validate backup root exists
 if (-not (Test-Path $config.BackupRootDirectory)) {
     Write-Error "Backup directory does not exist: $($config.BackupRootDirectory)"
     exit 1
 }
 
-# Source the helper function from Start.ps1
-. "$RootDir\Start.ps1"
-
 $Distro = $config.WslDistroName
+$WslScriptsDir = Join-Path $RootDir "Scripts\WSL"
 
 # Find the WSL backup directory
 Write-Host "`n=== WSL SYSTEM RESTORE ===" -ForegroundColor Cyan
@@ -55,43 +92,101 @@ $BackupDir = Find-BackupDirectory -BackupTypeDir $WslBackupDir -BackupType "WSL"
 
 if (-not $BackupDir -or -not (Test-Path $BackupDir)) {
     Write-Error "Unable to locate WSL backup directory. Restore cancelled."
+    exit 1
 }
 
 $InstallLocation = "C:\WSL\$Distro"
-$WslScriptsDir = "$RootDir\Scripts\WSL"
 
-Write-Host "Source: $BackupDir" -ForegroundColor Yellow
-Write-Host "Dest:   $InstallLocation"
+Write-Host "Source: $($BackupDir.FullName)" -ForegroundColor Yellow
+Write-Host "Distro: $Distro" -ForegroundColor Yellow
+Write-Host "Destination: $InstallLocation" -ForegroundColor Yellow
 
 # 1. Find Backups
-$FullBackup = Get-ChildItem "$BackupDir\WslBackup_*.tar" | Sort LastWriteTime -Descending | Select -First 1
-$DotBackup = Get-ChildItem "$BackupDir\WslDotfiles_*.tar.gz" | Sort LastWriteTime -Descending | Select -First 1
+Write-Host "`nSearching for backup files..." -ForegroundColor Yellow
+$FullBackup = Get-ChildItem "$($BackupDir.FullName)\WslBackup_*.tar" -ErrorAction SilentlyContinue | 
+              Sort-Object LastWriteTime -Descending | 
+              Select-Object -First 1
+$DotBackup = Get-ChildItem "$($BackupDir.FullName)\WslDotfiles_*.tar.gz" -ErrorAction SilentlyContinue | 
+             Sort-Object LastWriteTime -Descending | 
+             Select-Object -First 1
 
-if (-not $FullBackup) { Write-Error "No Backup Tar found in $BackupDir" }
-Write-Host "Found Backup: $($FullBackup.Name)" -ForegroundColor Green
+if (-not $FullBackup) { 
+    Write-Error "No distro backup found in $($BackupDir.FullName)"
+    exit 1
+}
+
+Write-Host "Found distro backup: $($FullBackup.Name)" -ForegroundColor Green
+if ($DotBackup) {
+    Write-Host "Found dotfiles backup: $($DotBackup.Name)" -ForegroundColor Green
+} else {
+    Write-Host "⚠ No dotfiles backup found (continuing without dotfiles)" -ForegroundColor Yellow
+}
 
 # 2. Import
-Write-Host "`n1. Importing Distro..." -ForegroundColor Yellow
-if (Test-Path $InstallLocation) { Write-Warning "Target folder exists. Proceeding anyway..." }
-else { New-Item -ItemType Directory -Path $InstallLocation -Force | Out-Null }
+Write-Host "`n1. Importing Distro (this may take a few minutes)..." -ForegroundColor Magenta
+if (-not (New-DirectoryIfNotExists -Path $InstallLocation)) {
+    Write-Error "Failed to create install directory: $InstallLocation"
+    exit 1
+}
+
 wsl --import $Distro $InstallLocation $FullBackup.FullName
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "WSL import failed"
+    exit 1
+}
 
 # 3. Inject Scripts
-Write-Host "2. Starting WSL & Injecting Tools..." -ForegroundColor Cyan
-wsl -d $Distro -- echo "Booted."
-$wslPath = "/mnt/" + ($WslScriptsDir.Replace(":", "").Replace("\", "/").ToLower())
+Write-Host "`n2. Starting WSL and injecting helper scripts..." -ForegroundColor Cyan
+$bootCmd = "echo 'WSL distro booted successfully'"
+if (-not (Invoke-WslCommand -Distro $Distro -Command $bootCmd -Quiet)) {
+    Write-Error "Failed to start WSL distro"
+    exit 1
+}
+
+$wslPath = ConvertTo-WslPath -WindowsPath $WslScriptsDir
+if (-not $wslPath) {
+    Write-Error "Failed to convert script path to WSL format"
+    exit 1
+}
+
 $deployCmd = "mkdir -p ~/.wsl-toolkit && cp $wslPath/*.sh ~/.wsl-toolkit/ && chmod +x ~/.wsl-toolkit/*.sh"
-wsl -d $Distro -- bash -lc $deployCmd
+if (-not (Invoke-WslCommand -Distro $Distro -Command $deployCmd)) {
+    Write-Error "Failed to inject toolkit scripts"
+    exit 1
+}
 
 # 4. Restore Dotfiles
-Write-Host "3. Restoring Dotfiles..." -ForegroundColor Cyan
-$wslBackupPath = "/mnt/" + ($BackupDir.Replace(":", "").Replace("\", "/").ToLower())
-wsl -d $Distro -- bash -lc "mkdir -p ~/restore && cp $wslBackupPath/$($DotBackup.Name) ~/restore/"
-wsl -d $Distro -- bash -lc "~/.wsl-toolkit/restore-dotfiles.sh ~/restore/$($DotBackup.Name)"
+if ($DotBackup) {
+    Write-Host "`n3. Restoring Dotfiles..." -ForegroundColor Cyan
+    $wslBackupPath = ConvertTo-WslPath -WindowsPath $BackupDir.FullName
+    if (-not $wslBackupPath) {
+        Write-Error "Failed to convert backup path to WSL format"
+        exit 1
+    }
+    
+    $restoreCmd = "mkdir -p ~/restore && cp '$wslBackupPath/$($DotBackup.Name)' ~/restore/"
+    if (-not (Invoke-WslCommand -Distro $Distro -Command $restoreCmd)) {
+        Write-Warning "Failed to copy dotfile backup to WSL"
+    } else {
+        $extractCmd = "~/.wsl-toolkit/restore-dotfiles.sh ~/restore/$($DotBackup.Name)"
+        if (-not (Invoke-WslCommand -Distro $Distro -Command $extractCmd)) {
+            Write-Warning "Dotfile restore script had errors (continuing anyway)"
+        }
+    }
+} else {
+    Write-Host "`n3. Skipping dotfiles (not available)" -ForegroundColor Yellow
+}
 
 # 5. Post Install
-Write-Host "4. Running Post-Install Setup..." -ForegroundColor Cyan
-wsl -d $Distro -- bash -lc "~/.wsl-toolkit/post-restore-install.sh"
+Write-Host "`n4. Running Post-Install Setup..." -ForegroundColor Cyan
+$postCmd = "~/.wsl-toolkit/post-restore-install.sh"
+if (-not (Invoke-WslCommand -Distro $Distro -Command $postCmd)) {
+    Write-Warning "Post-install script had warnings (but distro should be functional)"
+}
 
-Write-Host "`nRESTORE COMPLETE!" -ForegroundColor Green
-Write-Host "You can now run: wsl -d $Distro"
+Write-Host "`n✓ RESTORE COMPLETE!" -ForegroundColor Green
+Write-Host "You can now run: wsl -d $Distro" -ForegroundColor Cyan
+Write-Host "`nNext Steps:" -ForegroundColor Yellow
+Write-Host "  1. Launch WSL: wsl -d $Distro" -ForegroundColor White
+Write-Host "  2. Verify distro is functional" -ForegroundColor White
+Write-Host "  3. Check dotfiles and settings restored correctly" -ForegroundColor White
