@@ -114,9 +114,26 @@ wsl --export $Distro $FullExportFile
 # 4. Hash & Finish
 Write-Host "`n4. Generating Hashes..." -ForegroundColor Cyan
 $h1 = Get-FileHash $FullExportFile -Algorithm SHA256
+
 $targetDotfilePath = Join-Path $BackupDir $targetDotfile
-$h2 = Get-FileHash $targetDotfilePath -Algorithm SHA256
-$report = "WSL Backup Report ($Timestamp)`n---------------------------`nFull: $($h1.Hash)`nDots: $($h2.Hash)"
+
+# Wait for dotfile to appear on Windows side (WSL filesystem sync)
+$maxWait = 30
+$waited = 0
+while (-not (Test-Path $targetDotfilePath) -and $waited -lt $maxWait) {
+    Start-Sleep -Seconds 1
+    $waited++
+}
+
+if (-not (Test-Path $targetDotfilePath)) {
+    Write-Host "⚠ Warning: Dotfile backup exists but not accessible at: $targetDotfilePath" -ForegroundColor Yellow
+    Write-Host "It may be in: /mnt/d/DACdBeast-Migration-Backup/WSL/$Timestamp/" -ForegroundColor Yellow
+    $h2 = "N/A (file sync timeout)"
+} else {
+    $h2 = Get-FileHash $targetDotfilePath -Algorithm SHA256
+}
+
+$report = "WSL Backup Report ($Timestamp)`n---------------------------`nFull: $($h1.Hash)`nDots: $(if ($h2 -is [string]) { $h2 } else { $h2.Hash })"
 $report | Out-File (Join-Path $BackupDir "HashReport_$Timestamp.txt")
 
 Write-Host "`nSUCCESS! Backup Complete." -ForegroundColor Green
