@@ -38,6 +38,13 @@ Write-Host "`n=== WSL SYSTEM BACKUP ===" -ForegroundColor Cyan
 Write-Host "Distro: $Distro"
 Write-Host "Backup Root: $($config.BackupRootDirectory)"
 
+# Validate distro exists
+$distroExists = wsl -l --quiet | ForEach-Object { $_.Trim() } | Where-Object { $_ -match [regex]::Escape($Distro) }
+if (-not $distroExists) {
+    Write-Error "WSL Distro '$Distro' not found. Available distros: $(wsl -l --quiet | Out-String)"
+    exit 1
+}
+
 # --- CHECK FOR EXISTING WSL BACKUPS ---
 $existingBackups = @(Get-ChildItem -Path $WslBackupBaseDir -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
 
@@ -76,17 +83,35 @@ if (-not (Test-Path $BackupDir)) {
 
 # 1. Inject Toolkit into WSL
 Write-Host "`n1. Injecting helper scripts into ~/.wsl-toolkit..." -ForegroundColor Cyan
-$wslPath = "/mnt/" + ($WslScriptsDir.Replace(":", "").Replace("\", "/").ToLower())
+# Convert Scripts/WSL path to WSL mount path
+$wslScriptsDrive = $WslScriptsDir.Substring(0, 1).ToLower()
+$wslScriptsPath = $WslScriptsDir.Substring(2).Replace("\", "/").ToLower()
+$wslPath = "/mnt/$wslScriptsDrive$wslScriptsPath"
 $deployCmd = "mkdir -p ~/.wsl-toolkit && cp $wslPath/*.sh ~/.wsl-toolkit/ && chmod +x ~/.wsl-toolkit/*.sh"
+if (-not (wsl -d $Distro -- test -d "$wslPath")) {
+    Write-Error "WSL toolkit scripts directory not found at: $wslPath"
+    exit 1
+}
 wsl -d $Distro -- bash -lc $deployCmd
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to inject toolkit scripts into WSL"
+    exit 1
+}
 
 # 2. Run Dotfile Backup
 Write-Host "2. Running dotfile backup inside WSL..." -ForegroundColor Cyan
 wsl -d $Distro -- bash -lc "~/.wsl-toolkit/backup-dotfiles.sh"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Dotfile backup script failed"
+    exit 1
+}
 
-$LatestDotfile = wsl -d $Distro -- bash -lc "ls -t ~/wsl-dotfile-backups | head -n 1" | Out-String
+$LatestDotfile = wsl -d $Distro -- bash -lc "ls -t ~/wsl-dotfile-backups 2>/dev/null | head -n 1" | Out-String
 $LatestDotfile = $LatestDotfile.Trim()
-if (-not $LatestDotfile) { Write-Error "No dotfile backup created." }
+if (-not $LatestDotfile) { 
+    Write-Error "No dotfile backup created. Check that ~/wsl-dotfile-backups/ exists in the distro."
+    exit 1
+}
 
 Write-Host "   -> Found: $LatestDotfile"
 Write-Host "   -> Copying to backup drive..."
@@ -99,17 +124,34 @@ $wslBackupPath = "/mnt/$driveLetter$pathWithoutDrive"
 
 # Create the backup directory in WSL if it doesn't exist
 wsl -d $Distro -- bash -lc "mkdir -p '$wslBackupPath'"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to create backup directory in WSL: $wslBackupPath"
+    exit 1
+}
 
 # Copy the dotfiles to the backup directory with renamed filename
 $targetDotfile = "WslDotfiles_{0}.tar.gz" -f $Timestamp
 wsl -d $Distro -- bash -lc "cp ~/wsl-dotfile-backups/$LatestDotfile '$wslBackupPath/$targetDotfile'"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to copy dotfile backup to: $wslBackupPath/$targetDotfile"
+    exit 1
+}
 
 # 3. Full Export
 Write-Host "`n3. Exporting Full Distro Image (This may take time)..." -ForegroundColor Magenta
 Write-Host "   -> Shutting down WSL..."
 wsl --shutdown
 $FullExportFile = Join-Path $BackupDir "WslBackup_${Distro}_$Timestamp.tar"
+Write-Host "   -> Exporting to: $FullExportFile"
 wsl --export $Distro $FullExportFile
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "WSL distro export failed"
+    exit 1
+}
+if (-not (Test-Path $FullExportFile)) {
+    Write-Error "Export file not created: $FullExportFile"
+    exit 1
+}
 
 # 4. Hash & Finish
 Write-Host "`n4. Generating Hashes..." -ForegroundColor Cyan
@@ -127,7 +169,7 @@ while (-not (Test-Path $targetDotfilePath) -and $waited -lt $maxWait) {
 
 if (-not (Test-Path $targetDotfilePath)) {
     Write-Host "⚠ Warning: Dotfile backup exists but not accessible at: $targetDotfilePath" -ForegroundColor Yellow
-    Write-Host "It may be in: /mnt/d/DACdBeast-Migration-Backup/WSL/$Timestamp/" -ForegroundColor Yellow
+    Write-Host "It may be in the WSL filesystem at: $wslBackupPath/$targetDotfile" -ForegroundColor Yellow
     $h2 = "N/A (file sync timeout)"
 } else {
     $h2 = Get-FileHash $targetDotfilePath -Algorithm SHA256
