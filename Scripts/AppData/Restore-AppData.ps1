@@ -27,32 +27,42 @@ function Load-Config {
 
 $config = Load-Config
 
+# Validate config
+if ([string]::IsNullOrWhiteSpace($config.BackupRootDirectory)) {
+    Write-Error "BackupRootDirectory not configured. Run Start.ps1 to set it up."
+    exit 1
+}
+
+if (-not (Test-Path $config.BackupRootDirectory)) {
+    Write-Error "Backup directory does not exist: $($config.BackupRootDirectory)"
+    exit 1
+}
+
 # Source the helper function from Start.ps1
 . "$RootDir\Start.ps1"
 
 # Find the AppData backup directory
 $appDataBaseDir = Find-BackupDirectory -BackupTypeDir "$($config.BackupRootDirectory)\AppData" -BackupType "AppData"
-$logDir = "$appDataBaseDir\Logs"
 
-# Ensure log directory exists
-if (-not (Test-Path $logDir)) { 
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null 
-}
-$AppDataBaseDir = Join-Path $config.BackupRootDirectory "AppData"
-$BackupDir = Find-BackupDirectory -BackupTypeDir $AppDataBaseDir -BackupType "AppData"
-
-if (-not $BackupDir -or -not (Test-Path $BackupDir)) {
+if (-not $appDataBaseDir -or -not (Test-Path $appDataBaseDir)) {
     Write-Error "Unable to locate AppData backup directory. Restore cancelled."
     exit 1
 }
 
-# The backup files are in BackupDir/Backups/
-$appDataBackupDir = Join-Path $BackupDir "Backups"
+$logDir = "$appDataBaseDir\Logs"
 
-# Ensure directories exist
-if (-not (Test-Path $logDir)) { 
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null 
+# Ensure log directory exists
+try {
+    if (-not (Test-Path $logDir)) { 
+        New-Item -ItemType Directory -Force -Path $logDir | Out-Null 
+    }
+} catch {
+    Write-Error "Failed to create log directory: $_"
+    exit 1
 }
+
+# The backup files are in BackupDir/Backups/
+$appDataBackupDir = Join-Path $appDataBaseDir "Backups"
 
 # Setup logging
 $timestamp = Get-Date -Format "yyyyMMdd_HHmm"
@@ -65,15 +75,14 @@ Write-Host "Backup source: $appDataBackupDir" -ForegroundColor DarkGray
 # Validate backup directory exists and has files
 if (-not (Test-Path $appDataBackupDir)) {
     Write-Error "Backup directory not found: $appDataBackupDir"
-    Write-Host "Please run Option 5 to create backups first." -ForegroundColor Yellow
-    Stop-Transcript | Out-Null
+    Write-Host "Please run the backup process first to create AppData backups." -ForegroundColor Yellow
     exit 1
 }
 
 $zipFiles = Get-ChildItem -Path $appDataBackupDir -Filter "*.zip" -File -ErrorAction SilentlyContinue
-if ($zipFiles.Count -eq 0) {
+
+if ($null -eq $zipFiles -or $zipFiles.Count -eq 0) {
     Write-Error "No backup files found in: $appDataBackupDir"
-    Stop-Transcript | Out-Null
     exit 1
 }
 
@@ -106,15 +115,29 @@ foreach ($zip in $zipFiles) {
     try {
         # Extract to temp location first to determine destination
         $tempExtractPath = "$env:TEMP\AppData_Restore_Temp_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-        New-Item -ItemType Directory -Force -Path $tempExtractPath | Out-Null
+        
+        try {
+            New-Item -ItemType Directory -Force -Path $tempExtractPath | Out-Null
+        } catch {
+            Write-Host "  ✗ Failed to create temp directory: $($_.Exception.Message)" -ForegroundColor Red
+            $errorCount++
+            continue
+        }
         
         Write-Host "  Extracting to temporary location..." -ForegroundColor DarkGray
-        Expand-Archive -Path $zip.FullName -DestinationPath $tempExtractPath -Force -ErrorAction Stop
+        try {
+            Expand-Archive -Path $zip.FullName -DestinationPath $tempExtractPath -Force -ErrorAction Stop
+        } catch {
+            Write-Host "  ✗ Failed to extract archive: $($_.Exception.Message)" -ForegroundColor Red
+            $errorCount++
+            Remove-Item -Path $tempExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+            continue
+        }
         
         # Find extracted folder
         $extractedFolders = Get-ChildItem -Path $tempExtractPath -Directory
         
-        if ($extractedFolders.Count -eq 0) {
+        if ($null -eq $extractedFolders -or $extractedFolders.Count -eq 0) {
             Write-Host "  ✗ Failed to extract: No folders found in archive" -ForegroundColor Red
             $errorCount++
             Remove-Item -Path $tempExtractPath -Recurse -Force -ErrorAction SilentlyContinue
@@ -154,18 +177,36 @@ foreach ($zip in $zipFiles) {
             $backupSuffix = Get-Date -Format "yyyyMMdd_HHmmss"
             $existingBackup = "$destPath`_backup_$backupSuffix"
             Write-Host "  → Backing up existing folder to: $existingBackup" -ForegroundColor Yellow
-            Rename-Item -Path $destPath -NewName "$destPath`_backup_$backupSuffix" -ErrorAction Stop
+            try {
+                Rename-Item -Path $destPath -NewName "$destPath`_backup_$backupSuffix" -ErrorAction Stop
+            } catch {
+                Write-Host "  ✗ Failed to backup existing folder: $($_.Exception.Message)" -ForegroundColor Red
+                $errorCount++
+                Remove-Item -Path $tempExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+                continue
+            }
         }
         
         # Move extracted folder to destination
         Write-Host "  → Restoring to original location..." -ForegroundColor Cyan
-        Move-Item -Path $sourceFolder.FullName -Destination $destPath -Force -ErrorAction Stop
+        try {
+            Move-Item -Path $sourceFolder.FullName -Destination $destPath -Force -ErrorAction Stop
+        } catch {
+            Write-Host "  ✗ Failed to move restored folder: $($_.Exception.Message)" -ForegroundColor Red
+            $errorCount++
+            Remove-Item -Path $tempExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+            continue
+        }
         
         Write-Host "  ✓ Restore successful" -ForegroundColor Green
         $restoreCount++
         
         # Cleanup temp extraction folder
-        Remove-Item -Path $tempExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+        try {
+            Remove-Item -Path $tempExtractPath -Recurse -Force -ErrorAction Stop
+        } catch {
+            Write-Host "  ⚠ Warning: Failed to cleanup temp directory: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
         
     } catch {
         Write-Host "  ✗ Restore failed: $($_.Exception.Message)" -ForegroundColor Red
@@ -173,7 +214,11 @@ foreach ($zip in $zipFiles) {
         
         # Cleanup
         if (Test-Path $tempExtractPath) {
-            Remove-Item -Path $tempExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+            try {
+                Remove-Item -Path $tempExtractPath -Recurse -Force -ErrorAction Stop
+            } catch {
+                Write-Host "  ⚠ Warning: Failed to cleanup temp directory: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
         }
     }
 }

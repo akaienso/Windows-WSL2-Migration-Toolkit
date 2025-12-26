@@ -51,6 +51,22 @@ if ([string]::IsNullOrWhiteSpace($InputFile)) {
     $csvPath = $InputFile
 }
 
+# Validate input CSV exists
+if (-not (Test-Path $csvPath)) {
+    Write-Error "Inventory CSV not found: $csvPath"
+    exit 1
+}
+
+# Create installer directory
+if (-not (Test-Path $installDir)) {
+    try {
+        New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+    } catch {
+        Write-Error "Failed to create installer directory: $_"
+        exit 1
+    }
+}
+
 $winScriptPath = "$installDir\Restore_Windows.ps1"
 $linuxScriptPath = "$installDir\Restore_Linux.sh"
 

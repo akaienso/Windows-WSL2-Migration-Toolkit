@@ -27,6 +27,22 @@ function Load-Config {
 
 $config = Load-Config
 
+# Validate config
+if ([string]::IsNullOrWhiteSpace($config.WslDistroName)) {
+    Write-Error "WslDistroName not configured. Run Start.ps1 to set it up."
+    exit 1
+}
+
+if ([string]::IsNullOrWhiteSpace($config.BackupRootDirectory)) {
+    Write-Error "BackupRootDirectory not configured. Run Start.ps1 to set it up."
+    exit 1
+}
+
+if (-not (Test-Path $config.BackupRootDirectory)) {
+    Write-Error "Backup directory does not exist: $($config.BackupRootDirectory)"
+    exit 1
+}
+
 # Source the helper function from Start.ps1
 . "$RootDir\Start.ps1"
 

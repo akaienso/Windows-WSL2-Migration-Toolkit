@@ -24,6 +24,17 @@ function Load-Config {
 
 $config = Load-Config
 
+# Validate backup root directory
+if ([string]::IsNullOrWhiteSpace($config.BackupRootDirectory)) {
+    Write-Error "BackupRootDirectory not configured. Run Start.ps1 to set it up."
+    exit 1
+}
+
+if (-not (Test-Path $config.BackupRootDirectory)) {
+    Write-Error "Backup directory does not exist: $($config.BackupRootDirectory)"
+    exit 1
+}
+
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 $appDataBaseDir = "$($config.BackupRootDirectory)\AppData\$timestamp"
 $invDir = "$appDataBaseDir\Inventories"
@@ -31,8 +42,13 @@ $logDir = "$appDataBaseDir\Logs"
 $csvPath = "$invDir\$($config.InventoryOutputCSV)"
 $wingetJsonPath = "$invDir\winget-apps.json"
 
-if (-not (Test-Path $invDir)) { New-Item -ItemType Directory -Force -Path $invDir | Out-Null }
-if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Force -Path $logDir | Out-Null }
+try {
+    if (-not (Test-Path $invDir)) { New-Item -ItemType Directory -Force -Path $invDir | Out-Null }
+    if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Force -Path $logDir | Out-Null }
+} catch {
+    Write-Error "Failed to create inventory directories: $_"
+    exit 1
+}
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmm"
 Start-Transcript -Path "$logDir\Inventory_Log_$timestamp.txt" -Append | Out-Null
@@ -124,8 +140,17 @@ try {
 
 # EXPORT
 Write-Host "5. Saving CSV... " -NoNewline -ForegroundColor Yellow
-$masterList | Sort-Object Category, Environment, 'Application Name' | Select-Object 'Category', 'Application Name', 'Version', 'Environment', 'Source', 'Restoration Command', @{Name='Keep (Y/N)';Expression={"FALSE"}}, @{Name='Backup Settings (Y/N)';Expression={"FALSE"}} | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8 -Force
-Write-Host "Done." -ForegroundColor Green
+try {
+    $masterList | Sort-Object Category, Environment, 'Application Name' | Select-Object 'Category', 'Application Name', 'Version', 'Environment', 'Source', 'Restoration Command', @{Name='Keep (Y/N)';Expression={"FALSE"}}, @{Name='Backup Settings (Y/N)';Expression={"FALSE"}} | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8 -Force
+    if (-not (Test-Path $csvPath)) {
+        Write-Error "CSV file was not created: $csvPath"
+        exit 1
+    }
+    Write-Host "Done." -ForegroundColor Green
+} catch {
+    Write-Error "Failed to save CSV: $_"
+    exit 1
+}
 
 if (Test-Path $wingetJsonPath) { Remove-Item $wingetJsonPath -Force -ErrorAction SilentlyContinue }
 Stop-Transcript | Out-Null

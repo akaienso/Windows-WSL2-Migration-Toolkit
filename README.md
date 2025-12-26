@@ -5,7 +5,15 @@
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207-blue) ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20WSL2-lightgrey) ![License](https://img.shields.io/badge/License-MIT-green)
 
-## 🚀 Features
+## � Documentation
+
+For comprehensive guides and reference materials, see:
+- **[Documentation Index](docs/INDEX.md)** - Start here for guidance by role- **[User Guide](docs/USER-GUIDE.md)** - Step-by-step workflows, troubleshooting, and FAQ
+- **[Developer Guide](docs/DEVELOPER-GUIDE.md)** - Architecture, code patterns, and extending the toolkit
+- **[Error Handling Guide](docs/ERROR-HANDLING-AUDIT.md)** - Complete error handling framework and patterns
+- **[Quick Reference](docs/ERROR-HANDLING-QUICK-REFERENCE.md)** - Common errors and quick fixes
+
+## �🚀 Features
 1.  **Windows App Inventory:** Scans Winget, Store, and Registry to build a complete list of your installed software.
 2.  **Restore Generator:** Creates an automated PowerShell script to re-install your Windows apps.
 3.  **AppData Backup & Restore:** Selectively backup application settings and configuration files to an external drive, then restore them after a fresh install.

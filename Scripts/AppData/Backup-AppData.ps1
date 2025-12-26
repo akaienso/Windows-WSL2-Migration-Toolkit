@@ -27,6 +27,17 @@ function Load-Config {
 
 $config = Load-Config
 
+# Validate backup root
+if ([string]::IsNullOrWhiteSpace($config.BackupRootDirectory)) {
+    Write-Error "BackupRootDirectory not configured. Run Start.ps1 to set it up."
+    exit 1
+}
+
+if (-not (Test-Path $config.BackupRootDirectory)) {
+    Write-Error "Backup directory does not exist: $($config.BackupRootDirectory)"
+    exit 1
+}
+
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 $appDataBaseDir = "$($config.BackupRootDirectory)\AppData\$timestamp"
 $invDir = "$appDataBaseDir\Inventories"
@@ -42,8 +53,14 @@ if (-not (Test-Path $invDir)) {
     Write-Error "Inventory directory not found: $invDir"
     exit 1
 }
-if (-not (Test-Path $logDir)) { 
-    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+try {
+    if (-not (Test-Path $logDir)) { 
+        New-Item -ItemType Directory -Force -Path $logDir | Out-Null 
+    }
+} catch {
+    Write-Error "Failed to create log directory: $_"
+    exit 1
 }
 
 # Setup logging
@@ -87,13 +104,24 @@ if ($existingBackups.Count -gt 0) {
 }
 
 if (-not (Test-Path $appDataBackupDir)) { 
-    New-Item -ItemType Directory -Force -Path $appDataBackupDir | Out-Null 
+    try {
+        New-Item -ItemType Directory -Force -Path $appDataBackupDir | Out-Null
+    } catch {
+        Write-Error "Failed to create backup directory: $_"
+        Stop-Transcript | Out-Null
+        exit 1
+    }
 }
 
 # Load or create folder mapping
 $folderMap = @{}
 if (Test-Path $folderMapPath) {
-    $folderMap = Get-Content $folderMapPath -Raw | ConvertFrom-Json | ConvertTo-Hashtable
+    try {
+        $folderMap = Get-Content $folderMapPath -Raw | ConvertFrom-Json | ConvertTo-Hashtable
+    } catch {
+        Write-Host "⚠ Warning: Failed to load folder map file, will create fresh mapping: $_" -ForegroundColor Yellow
+        $folderMap = @{}
+    }
 }
 
 # Validate CSV exists
@@ -256,11 +284,29 @@ function Save-FolderMapping {
         [string]$FilePath
     )
     
-    $Map | ConvertTo-Json | Out-File -FilePath $FilePath -Encoding UTF8 -Force
+    try {
+        $Map | ConvertTo-Json | Out-File -FilePath $FilePath -Encoding UTF8 -Force -ErrorAction Stop
+    } catch {
+        Write-Host "⚠ Warning: Failed to save folder mapping file: $_" -ForegroundColor Yellow
+    }
 }
 
 # Load CSV
-$inventory = Import-Csv -Path $csvPath
+try {
+    $inventory = Import-Csv -Path $csvPath -ErrorAction Stop
+} catch {
+    Write-Error "Failed to parse CSV file: $_"
+    Write-Host "Please check the file format and ensure it's valid CSV." -ForegroundColor Yellow
+    Stop-Transcript | Out-Null
+    exit 1
+}
+
+if ($null -eq $inventory -or $inventory.Count -eq 0) {
+    Write-Host "No entries found in inventory CSV. Nothing to backup." -ForegroundColor Yellow
+    Stop-Transcript | Out-Null
+    exit 0
+}
+
 $backupCount = 0
 $errorCount = 0
 $skippedCount = 0
@@ -347,9 +393,16 @@ foreach ($row in $inventory) {
                 try {
                     Write-Host "  → Compressing: $folderPath" -ForegroundColor Cyan
                     Compress-Archive -Path $folderPath -DestinationPath $zipPath -Force -ErrorAction Stop
-                    $zipSize = (Get-Item $zipPath).Length / 1MB
-                    Write-Host "  ✓ Backup complete: $zipFileName ($([Math]::Round($zipSize, 2)) MB)" -ForegroundColor Green
-                    $backupCount++
+                    
+                    # Verify file was created
+                    if (-not (Test-Path $zipPath)) {
+                        Write-Host "  ✗ Backup failed: Archive file was not created" -ForegroundColor Red
+                        $errorCount++
+                    } else {
+                        $zipSize = (Get-Item $zipPath).Length / 1MB
+                        Write-Host "  ✓ Backup complete: $zipFileName ($([Math]::Round($zipSize, 2)) MB)" -ForegroundColor Green
+                        $backupCount++
+                    }
                 } catch {
                     Write-Host "  ✗ Backup failed: $($_.Exception.Message)" -ForegroundColor Red
                     $errorCount++
