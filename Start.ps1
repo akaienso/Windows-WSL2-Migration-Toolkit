@@ -129,6 +129,13 @@ function Validate-BackupPath {
 $currentConfig = Load-Config
 Validate-BackupPath ([ref]$currentConfig)
 
+# Save BackupRootDirectory to settings.json for persistence
+try {
+    $currentConfig | ConvertTo-Json | Out-File -FilePath $settingsPath -Encoding UTF8 -Force
+} catch {
+    Write-Host "⚠ Warning: Could not save settings to settings.json" -ForegroundColor Yellow
+}
+
 # --- VALIDATE/SETUP WSL DISTRO ---
 function Validate-WslDistro {
     param([ref]$config)
@@ -445,36 +452,47 @@ do {
         }
         "2" { 
             Clear-Host; $target = "$scriptPath\ApplicationInventory\Generate-Restore-Scripts.ps1"
-            $inputFile = "$PSScriptRoot\$($currentConfig.InventoryDirectory)\$($currentConfig.InventoryInputCSV)"
             
-            # Check if default file exists
-            if (-not (Test-Path $inputFile)) {
+            # Find the most recent timestamped inventory directory
+            $invBaseDir = "$($currentConfig.BackupRootDirectory)\Inventory"
+            $latestDir = Get-ChildItem -Path $invBaseDir -Directory -ErrorAction SilentlyContinue | 
+                         Sort-Object LastWriteTime -Descending | 
+                         Select-Object -First 1
+            
+            if (-not $latestDir) {
                 Write-Host "`n⚠ INPUT FILE NOT FOUND" -ForegroundColor Yellow
-                Write-Host "Expected: $inputFile" -ForegroundColor Red
-                Write-Host "`nOptions:" -ForegroundColor Cyan
-                Write-Host "  1. Run Option 1 to generate INSTALLED-SOFTWARE-INVENTORY.csv" -ForegroundColor White
-                Write-Host "  2. Copy to SOFTWARE-INSTALLATION-INVENTORY.csv and edit" -ForegroundColor White
-                Write-Host "  3. Provide path to your inventory file" -ForegroundColor White
-                Write-Host "  4. Exit and try again later" -ForegroundColor White
-                $choice = Read-Host "`nEnter option (1/2/3/4)"
-                
-                if ($choice -eq "3") {
-                    $customPath = Read-Host "Enter full path to your inventory CSV file"
-                    if (Test-Path $customPath) {
-                        $inputFile = $customPath
-                        Write-Host "✓ File found: $inputFile" -ForegroundColor Green
-                    } else {
-                        Write-Host "✗ File not found at: $customPath" -ForegroundColor Red
-                        Write-Host "Please check the path and try again." -ForegroundColor Yellow
-                        Pause
-                        return
-                    }
+                Write-Host "Expected: $invBaseDir\[timestamp]\Inventories\$($currentConfig.InventoryInputCSV)" -ForegroundColor Red
+                Write-Host "`nNo inventory directories found." -ForegroundColor Red
+                Write-Host "`nRun Option 1 to generate inventory first." -ForegroundColor Cyan
+                Pause
+                return
+            }
+            
+            $inputFile = "$($latestDir.FullName)\Inventories\$($currentConfig.InventoryInputCSV)"
+            
+            # If input file doesn't exist but output file does, create the input file
+            if (-not (Test-Path $inputFile)) {
+                $outputFile = "$($latestDir.FullName)\Inventories\$($currentConfig.InventoryOutputCSV)"
+                if (Test-Path $outputFile) {
+                    Write-Host "Creating editable copy of inventory..." -ForegroundColor Yellow
+                    Copy-Item -Path $outputFile -Destination $inputFile -Force
+                    Write-Host "✓ Created: $inputFile" -ForegroundColor Green
+                    Write-Host "`n⚠ IMPORTANT: Review the CSV before proceeding." -ForegroundColor Cyan
+                    Write-Host "  • Set 'Keep (Y/N)' to TRUE for apps you want to reinstall" -ForegroundColor White
+                    Write-Host "`nEdit the file in: $($latestDir.FullName)\Inventories\" -ForegroundColor Cyan
+                    Write-Host "Then run Option 2 again when done." -ForegroundColor Cyan
+                    Pause
+                    return
                 } else {
-                    Write-Host "Returning to menu..." -ForegroundColor Yellow
+                    Write-Host "`n⚠ No inventory files found in: $($latestDir.FullName)\Inventories\" -ForegroundColor Red
+                    Write-Host "Run Option 1 again to regenerate inventory." -ForegroundColor Cyan
                     Pause
                     return
                 }
             }
+            
+            # File found, run the script
+            Write-Host "Found inventory: $inputFile" -ForegroundColor Green
             
             # Run script with the inputFile path
             if (Test-Path $target) { 
@@ -482,10 +500,8 @@ do {
             } else { 
                 Write-Error "Missing: $target" 
             }
-            Write-Host "`n✓ Restore scripts generated! Next steps:" -ForegroundColor Green
-            Write-Host "  1. Review Installers/Restore_Windows.ps1 and Restore_Linux.sh" -ForegroundColor Cyan
-            Write-Host "  2. For Windows: Run 'Run-Restore-Admin.bat'" -ForegroundColor Cyan
-            Write-Host "  3. For WSL: Manual execution or use Option 4 for full restoration" -ForegroundColor Cyan
+            Write-Host "`n✓ Restore scripts generated!" -ForegroundColor Green
+            Write-Host "  Location: $($latestDir.FullName)\Installers\" -ForegroundColor Cyan
             Pause
         }
         "3" {

@@ -38,13 +38,23 @@ if (-not (Test-Path $config.BackupRootDirectory)) {
     exit 1
 }
 
-$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$appDataBaseDir = "$($config.BackupRootDirectory)\AppData\$timestamp"
-$invDir = "$appDataBaseDir\Inventories"
-$logDir = "$appDataBaseDir\Logs"
-$backupRootDirectory = $config.BackupRootDirectory
-$appDataBackupBaseDir = Join-Path $backupRootDirectory "AppData\$timestamp\Backups"
-$appDataBackupDir = $appDataBackupBaseDir
+# Find the most recent timestamped Inventory directory
+$invBaseDir = "$($config.BackupRootDirectory)\Inventory"
+$latestInvDir = Get-ChildItem -Path $invBaseDir -Directory -ErrorAction SilentlyContinue | 
+                Sort-Object LastWriteTime -Descending | 
+                Select-Object -First 1
+
+if (-not $latestInvDir) {
+    Write-Error "No inventory directory found in: $invBaseDir`nRun Option 1 (Get-Inventory) first."
+    exit 1
+}
+
+# Use the inventory timestamp to organize ApplicationData backup in parallel structure
+$invTimestamp = $latestInvDir.Name
+$appDataBaseDir = "$($config.BackupRootDirectory)\ApplicationData"
+$invDir = "$($latestInvDir.FullName)\Inventories"
+$logDir = "$appDataBaseDir\$invTimestamp\Logs"
+$appDataBackupDir = "$appDataBaseDir\$invTimestamp\Backups"
 $csvPath = "$invDir\$($config.InventoryInputCSV)"
 $folderMapPath = "$invDir\AppData_Folder_Map.json"
 
@@ -74,11 +84,10 @@ Write-Host "Backup destination: $appDataBackupDir" -ForegroundColor DarkGray
 Write-Host "Folder map: $folderMapPath" -ForegroundColor DarkGray
 
 # --- CHECK FOR EXISTING APPDATA BACKUPS ---
-$appDataTimestampBaseDir = Join-Path $backupRootDirectory "AppData"
-$existingBackups = @(Get-ChildItem -Path $appDataTimestampBaseDir -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+$existingBackups = @(Get-ChildItem -Path $appDataBaseDir -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
 
 if ($existingBackups.Count -gt 0) {
-    Write-Host "`n⚠ Found $($existingBackups.Count) existing AppData backup(s):" -ForegroundColor Yellow
+    Write-Host "`n⚠ Found $($existingBackups.Count) existing ApplicationData backup(s):" -ForegroundColor Yellow
     foreach ($backup in $existingBackups | Select-Object -First 5) {
         Write-Host "   • $($backup.Name)" -ForegroundColor DarkGray
     }
@@ -86,20 +95,17 @@ if ($existingBackups.Count -gt 0) {
         Write-Host "   ... and $($existingBackups.Count - 5) more" -ForegroundColor DarkGray
     }
     
-    Write-Host "`n❓ Replace existing AppData backups with new ones?" -ForegroundColor Cyan
-    Write-Host "   Note: This will DELETE all existing AppData backups and create fresh backups with current timestamp." -ForegroundColor DarkGray
-    Write-Host "   Yes (Y) / No (N): " -ForegroundColor Cyan -NoNewline
+    Write-Host "`n❓ Keep existing ApplicationData backups or create a new one?" -ForegroundColor Cyan
+    Write-Host "   (New backup will use current timestamp and coexist with old backups)" -ForegroundColor DarkGray
+    Write-Host "   Create New (N) / Keep Old (K): " -ForegroundColor Cyan -NoNewline
     $response = Read-Host
     
-    if ($response -match "^(Y|Yes)$") {
-        Write-Host "`nRemoving existing AppData backups..." -ForegroundColor Yellow
-        foreach ($backup in $existingBackups) {
-            Remove-Item -Path $backup.FullName -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Host "   ✓ Deleted: $($backup.Name)" -ForegroundColor DarkGray
-        }
-        Write-Host "Existing AppData backups removed." -ForegroundColor Green
-    } else {
-        Write-Host "Keeping existing AppData backups. Creating new backup in separate directory." -ForegroundColor Cyan
+    if ($response -match "^(K|Keep)$") {
+        Write-Host "Keeping existing ApplicationData backups." -ForegroundColor Cyan
+        # Use the most recent backup directory
+        $latestBackup = $existingBackups | Select-Object -First 1
+        $invTimestamp = $latestBackup.Name
+        $appDataBackupDir = "$appDataBaseDir\$invTimestamp\Backups"
     }
 }
 

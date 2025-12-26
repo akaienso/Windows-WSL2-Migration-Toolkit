@@ -24,31 +24,16 @@ function Load-Config {
 
 $config = Load-Config
 
-# Validate backup root directory
-if ([string]::IsNullOrWhiteSpace($config.BackupRootDirectory)) {
-    Write-Error "BackupRootDirectory not configured. Run Start.ps1 to set it up."
-    exit 1
-}
-
-if (-not (Test-Path $config.BackupRootDirectory)) {
-    Write-Error "Backup directory does not exist: $($config.BackupRootDirectory)"
-    exit 1
-}
-
+# Save inventory to timestamped directory (where it's created during inventory scan)
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$appDataBaseDir = "$($config.BackupRootDirectory)\AppData\$timestamp"
-$invDir = "$appDataBaseDir\Inventories"
-$logDir = "$appDataBaseDir\Logs"
+$timestampDir = "$($config.BackupRootDirectory)\Inventory\$timestamp"
+$invDir = "$timestampDir\Inventories"
+$logDir = "$timestampDir\Logs"
 $csvPath = "$invDir\$($config.InventoryOutputCSV)"
 $wingetJsonPath = "$invDir\winget-apps.json"
 
-try {
-    if (-not (Test-Path $invDir)) { New-Item -ItemType Directory -Force -Path $invDir | Out-Null }
-    if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Force -Path $logDir | Out-Null }
-} catch {
-    Write-Error "Failed to create inventory directories: $_"
-    exit 1
-}
+if (-not (Test-Path $invDir)) { New-Item -ItemType Directory -Force -Path $invDir | Out-Null }
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Force -Path $logDir | Out-Null }
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmm"
 Start-Transcript -Path "$logDir\Inventory_Log_$timestamp.txt" -Append | Out-Null

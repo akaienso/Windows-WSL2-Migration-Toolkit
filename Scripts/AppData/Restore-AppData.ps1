@@ -38,17 +38,18 @@ if (-not (Test-Path $config.BackupRootDirectory)) {
     exit 1
 }
 
-# Source the helper function from Start.ps1
-. "$RootDir\Start.ps1"
+# Find the most recent ApplicationData backup directory
+$appDataBaseDir = "$($config.BackupRootDirectory)\ApplicationData"
+$latestBackup = Get-ChildItem -Path $appDataBaseDir -Directory -ErrorAction SilentlyContinue | 
+                 Sort-Object LastWriteTime -Descending | 
+                 Select-Object -First 1
 
-# Find the AppData backup directory
-$appDataBaseDir = Find-BackupDirectory -BackupTypeDir "$($config.BackupRootDirectory)\AppData" -BackupType "AppData"
-
-if (-not $appDataBaseDir -or -not (Test-Path $appDataBaseDir)) {
-    Write-Error "Unable to locate AppData backup directory. Restore cancelled."
+if (-not $latestBackup) {
+    Write-Error "No ApplicationData backups found in: $appDataBaseDir`nRun Option 5 to create backups first."
     exit 1
 }
 
+$appDataBaseDir = $latestBackup.FullName
 $logDir = "$appDataBaseDir\Logs"
 
 # Ensure log directory exists

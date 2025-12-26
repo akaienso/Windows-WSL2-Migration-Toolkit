@@ -29,26 +29,29 @@ function Load-Config {
 
 $config = Load-Config
 
-# Find the most recent AppData timestamped directory
-$appDataBaseDir = "$($config.BackupRootDirectory)\AppData"
-$latestTimestamp = Get-ChildItem -Path $appDataBaseDir -Directory -ErrorAction SilentlyContinue | 
-                   Sort-Object LastWriteTime -Descending | 
-                   Select-Object -First 1 | 
-                   ForEach-Object { $_.Name }
-
-if (-not $latestTimestamp) {
-    Write-Error "No AppData timestamped directory found. Run Option 1 (Get-Inventory) first."
-    exit 1
-}
-
-$invDir = "$appDataBaseDir\$latestTimestamp\Inventories"
-$installDir = "$appDataBaseDir\$latestTimestamp\Installers"
-
-# Use provided InputFile or default to config location
+# Use provided InputFile, or find the most recent timestamped inventory
 if ([string]::IsNullOrWhiteSpace($InputFile)) {
-    $csvPath = "$invDir\$($config.InventoryInputCSV)"
+    # Find the most recent Inventory timestamped directory
+    $invBaseDir = "$($config.BackupRootDirectory)\Inventory"
+    $latestDir = Get-ChildItem -Path $invBaseDir -Directory -ErrorAction SilentlyContinue | 
+                 Sort-Object LastWriteTime -Descending | 
+                 Select-Object -First 1
+    
+    if (-not $latestDir) {
+        Write-Host "`n⚠ INPUT FILE NOT FOUND" -ForegroundColor Yellow
+        Write-Host "Expected: $invBaseDir\[timestamp]\Inventories\$($config.InventoryInputCSV)" -ForegroundColor Red
+        Write-Host "`nNo inventory directories found." -ForegroundColor Red
+        Write-Host "Run Option 1 (Get-Inventory) first to generate one." -ForegroundColor Cyan
+        exit 1
+    }
+    
+    $csvPath = "$($latestDir.FullName)\Inventories\$($config.InventoryInputCSV)"
+    $installDir = "$($latestDir.FullName)\Installers"
 } else {
     $csvPath = $InputFile
+    # When using custom InputFile, put scripts in the same timestamped directory as the CSV
+    $timestampDir = Split-Path -Parent (Split-Path -Parent $InputFile)
+    $installDir = "$timestampDir\Installers"
 }
 
 # Validate input CSV exists

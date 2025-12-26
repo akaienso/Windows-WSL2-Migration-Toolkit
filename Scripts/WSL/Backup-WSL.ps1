@@ -39,9 +39,11 @@ Write-Host "Distro: $Distro"
 Write-Host "Backup Root: $($config.BackupRootDirectory)"
 
 # Validate distro exists
-$distroExists = wsl -l --quiet | ForEach-Object { $_.Trim() } | Where-Object { $_ -match [regex]::Escape($Distro) }
+$allDistros = wsl -l --quiet | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+$distroExists = $allDistros | Where-Object { $_ -eq $Distro }
+
 if (-not $distroExists) {
-    Write-Error "WSL Distro '$Distro' not found. Available distros: $(wsl -l --quiet | Out-String)"
+    Write-Error "WSL Distro '$Distro' not found. Available distros: $($allDistros -join ', ')"
     exit 1
 }
 
@@ -88,13 +90,10 @@ $wslScriptsDrive = $WslScriptsDir.Substring(0, 1).ToLower()
 $wslScriptsPath = $WslScriptsDir.Substring(2).Replace("\", "/").ToLower()
 $wslPath = "/mnt/$wslScriptsDrive$wslScriptsPath"
 $deployCmd = "mkdir -p ~/.wsl-toolkit && cp $wslPath/*.sh ~/.wsl-toolkit/ && chmod +x ~/.wsl-toolkit/*.sh"
-if (-not (wsl -d $Distro -- test -d "$wslPath")) {
-    Write-Error "WSL toolkit scripts directory not found at: $wslPath"
-    exit 1
-}
+
 wsl -d $Distro -- bash -lc $deployCmd
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed to inject toolkit scripts into WSL"
+    Write-Error "Failed to inject toolkit scripts into WSL. Verify the distro is running and the path exists: $wslPath"
     exit 1
 }
 
