@@ -1,29 +1,35 @@
 # Copilot Instructions for Windows-WSL2-Migration-Toolkit
 
 ## Project Overview
-This is a **system migration automation tool** for Windows users with WSL2. It orchestrates three independent workflows:
-1. **Windows App Inventory** → CSV editing → Generate restoration scripts
-2. **WSL2 Full System Backup** → Distro export + dotfile archive to external drive
-3. **WSL2 System Restore** → Import backup + re-inject dotfiles + post-install setup
+This is a **system migration automation tool** for Windows users with WSL2. It orchestrates **six independent workflows**:
+1. **Windows App Inventory** → Scan Winget, Store, Registry, WSL Apt packages
+2. **Generate Restore Scripts** → Read user-edited CSV → Produce `Restore_Windows.ps1` + `Restore_Linux.sh`
+3. **WSL System Backup** → Export full distro + backup dotfiles to external drive
+4. **WSL System Restore** → Import distro + restore dotfiles + post-install hooks
+5. **AppData Backup** → Selectively backup application settings/configs to external drive
+6. **AppData Restore** → Restore backed-up application settings to their original locations
 
-**Key insight**: The toolkit bridges PowerShell (Windows host) and Bash (WSL guest) using `wsl --exec` commands and cross-mounted paths (`/mnt/c/...`).
+**Key insight**: The toolkit bridges PowerShell (Windows host) and Bash (WSL guest) using `wsl --exec` commands and cross-mounted paths (`/mnt/c/...`). All backups default to `[BackupRoot]/WSL` (distro) and `[BackupRoot]/AppData` (settings).
 
 ## Architecture & Data Flow
 
-### Configuration Management (`config.json`)
-- Single source of truth for paths and distro name
-- Used by all scripts via `Get-Content | ConvertFrom-Json`
-- Default values embedded in `Start.ps1` (fallback mechanism)
-- **Key fields**: `ExternalBackupRoot` (prompted on first backup), `WslDistroName`, `InventoryDirectory`, `InstallersDirectory`, `LogDirectory`, `InventoryOutputCSV`, `InventoryInputCSV`
-- **ExternalBackupRoot**: Initially empty; user is prompted on first run with default of `./migration-backups` (relative to script root)
+### Configuration Management (`config.json` + `settings.json`)
+- **config.json**: Template/defaults shipped with toolkit
+- **settings.json**: User-persisted settings (created by Start.ps1 on first run)
+- Load precedence: `settings.json` (user) → `config.json` (defaults) → hardcoded defaults
+- **Key fields**: `BackupRootDirectory`, `WslDistroName`, `ScriptDirectory`, `LogDirectory`, `InventoryOutputCSV`, `InventoryInputCSV`
+- **BackupRootDirectory**: Validated and created on first run (default: `../Windows-WSL2-Backup` relative to toolkit root)
+- **WslDistroName**: Auto-detected from `wsl --list --quiet` (prompts if multiple distros exist)
 
-### Four-Step User Workflow
+### Six-Step User Workflow
 ```
 Start.ps1 (Main Menu)
-├─ Option 1: Get-Inventory.ps1 → Scan Windows/WSL → INSTALLED_SOFTWARE_INVENTORY.csv
+├─ Option 1: Get-Inventory.ps1 → Scan Windows/WSL → INSTALLED-SOFTWARE-INVENTORY.csv
 ├─ Option 2: Generate-Restore-Scripts.ps1 → Read CSV → Restore_Windows.ps1 + Restore_Linux.sh
-├─ Option 3: Backup-WSL.ps1 → Export distro + dotfiles to ExternalBackupRoot\WSL
-└─ Option 4: Restore-WSL.ps1 → Import distro + restore dotfiles + post-install
+├─ Option 3: Backup-WSL.ps1 → Export distro + dotfiles to BackupRootDirectory\WSL
+├─ Option 4: Restore-WSL.ps1 → Import distro + restore dotfiles + post-install
+├─ Option 5: Backup-AppData.ps1 → Fuzzy-match apps in %APPDATA% → ZIP to BackupRootDirectory\ApplicationData
+└─ Option 6: Restore-AppData.ps1 → Extract ZIPs to original locations
 ```
 
 ### Data Inventory Pipeline
@@ -38,8 +44,9 @@ Start.ps1 (Main Menu)
 - WSL: Filters linux keywords (lib*, systemd, etc.) → "System/Base (Linux)"
 - Otherwise: "User-Installed Application"
 
-**CSV schema**: `Category`, `Application Name`, `Version`, `Environment`, `Source`, `Restoration Command`, `Keep (Y/N)`
+**CSV schema**: `Category`, `Application Name`, `Version`, `Environment`, `Source`, `Restoration Command`, `Keep (Y/N)`, `Backup Settings (Y/N)`
 - User edits `Keep (Y/N)` column (TRUE/FALSE) to select apps for restoration
+- User edits `Backup Settings (Y/N)` column (TRUE/FALSE) to mark apps for AppData backup (independent choice)
 
 ### CSV Editing Workflow
 **After running Option 1 (Get-Inventory)**, you have `INSTALLED-SOFTWARE-INVENTORY.csv` in the Inventories folder. This is the system-generated output. **Copy it** to `SOFTWARE-INSTALLATION-INVENTORY.csv` (the user-editable input file) before proceeding with Step 2. This design prevents regenerating inventory from overwriting user edits.
@@ -82,63 +89,113 @@ Start.ps1 (Main Menu)
 - Filters rows where `Keep (Y/N)` = "TRUE|Yes|Y|1"
 - **Windows apps**: Build `winget install` commands (except Registry source → manual warnings)
 - **WSL apps**: Build `sudo apt install` commands (with newline normalization to `\n`)
-- Output: `Restore_Windows.ps1` + `Restore_Linux.sh` to `InstallersDirectory`
+- Output: `Restore_Windows.ps1` + `Restore_Linux.sh` to timestamped directory under `[BackupRoot]/Inventory/[timestamp]/Installers`
 
-### WSL Backup/Restore Sequence
+### AppData Backup/Restore Sequence
 
-#### Backup (Backup-WSL.ps1)
-1. Create `ExternalBackupRoot\WSL` directory
-2. **Inject toolkit**: Copy `Scripts\WSL\*.sh` to `~/.wsl-toolkit/` inside distro
-3. **Backup dotfiles**: Run `backup-dotfiles.sh` → Creates `~/wsl-dotfile-backups/dotfiles_TIMESTAMP.tar.gz`
-4. **Export full distro**: `wsl --export DISTRO output.tar` (shuts down WSL first)
-5. **Generate hashes**: SHA256 for both files → `HashReport_TIMESTAMP.txt`
+#### Backup (Backup-AppData.ps1)
+1. Read CSV and filter rows where `Backup Settings (Y/N)` = TRUE
+2. For each app, perform **fuzzy matching** against %APPDATA% and %LOCALAPPDATA% folders
+3. Compress matching folders into ZIP files (timestamped)
+4. Save ZIPs to `[BackupRoot]/ApplicationData/[timestamp]/Backups`
+5. Generate **AppData_Folder_Map.json** tracking original paths and backup locations
+6. Log detailed output: which folders matched, which were skipped
 
-#### Restore (Restore-WSL.ps1)
-1. Find latest backups (by LastWriteTime DESC)
-2. **Import distro**: `wsl --import DISTRO C:\WSL\DISTRO backup.tar`
-3. **Inject toolkit** (same as backup)
-4. **Restore dotfiles**: Copy tar.gz to WSL, run `restore-dotfiles.sh` to extract
-5. **Post-install**: Run `post-restore-install.sh` (custom setup hooks)
+#### Restore (Restore-AppData.ps1)
+1. Read ZIP files from latest backup directory
+2. For each ZIP, restore to original location (from AppData_Folder_Map.json)
+3. Create timestamped backup of existing data before overwriting
+4. Restore preserves file permissions and timestamps
 
 ## Project Conventions & Patterns
 
 ### PowerShell Style
 - **Error handling**: `$ErrorActionPreference = 'Stop'` at top of scripts (Backup/Restore only)
 - **Path handling**: `Split-Path` + `Join-Path` for cross-platform safety; avoid string interpolation
-- **Config loading**: Function `Load-Config` in Start.ps1 merges defaults with persisted JSON
-- **Logging**: `Start-Transcript` in inventory scripts, timestamped log files in `LogDirectory`
+- **Config loading**: Use `Load-Config` from `Scripts/Utils.ps1` module (replaces inline loading)
+- **Logging**: Use `Start-ScriptLogging`/`Stop-ScriptLogging` from Utils for unified logging
 - **Color output**: Cyan (headers), Yellow (progress), Magenta (critical), Red (errors), Green (success)
-- **WSL paths**: Convert Windows paths to mount: `"c:\path"` → `/mnt/c/path` (lowercase, forward slashes)
+- **WSL paths**: Use `ConvertTo-WslPath` from Utils (replaces manual conversion): converts all drive letters robustly
+- **WSL execution**: Use `Invoke-WslCommand` from Utils (includes distro validation and error handling)
+- **Directory creation**: Use `New-DirectoryIfNotExists` from Utils (validates and creates atomically)
+- **Fuzzy matching**: Use `-match` with loose regex for app name → folder matching (e.g., "Mozilla Firefox" matches "Mozilla" folders)
+
+### Utils.ps1 Module (New - v2025.12)
+**Location:** `Scripts/Utils.ps1` (400+ lines, 15 exported functions)
+
+**Key Functions:**
+- `Load-Config`: Unified config loading with proper precedence (settings.json → config.json → hardcoded)
+- `ConvertTo-WslPath`: Robust Windows→WSL path conversion (handles all drive letters, edge cases)
+- `Invoke-WslCommand`: Safe WSL command execution with distro validation and error handling
+- `Find-LatestBackupDir`: Locates most recent timestamped backup directory
+- `New-DirectoryIfNotExists`: Atomic directory creation with validation
+- `Test-CsvFile`: Validates CSV structure before processing
+- `Test-WslDistro`: Validates distro installation
+- `Save-JsonFile`/`Load-JsonFile`: Safe JSON operations with error handling
+- `Format-ByteSize`: Human-readable byte formatting (for logging)
+- `Start-ScriptLogging`/`Stop-ScriptLogging`: Unified logging with timestamps
+- `Get-ToolkitRoot`: Reliable toolkit root discovery
+- `Get-SafeFilename`: Sanitizes filenames (removes invalid characters)
+
+**All scripts now import Utils.ps1:**
+```powershell
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
+$utilsPath = Join-Path $RootDir "Scripts\Utils.ps1"
+if (-not (Test-Path $utilsPath)) { Write-Error "Utils.ps1 not found"; exit 1 }
+. $utilsPath
+```
 
 ### Bash Style (WSL Scripts)
 - **Set strict mode**: `set -u` (error on undefined variables)
 - **Path expansion**: Use `$HOME`, `$TIMESTAMP` for consistency
 - **Tar operations**: `--ignore-failed-read` flag (graceful on permission errors)
 - **Line endings**: All `.sh` files must use `\n` (LF), not `\r\n`
+- **Logging**: Enhanced item-by-item logging for clarity
+- **Permissions**: Fix file permissions after extraction (.ssh: 700/600, .config: 755/644)
 
 ### CSV Conventions
 - **Two-file pattern**: 
   - `INSTALLED-SOFTWARE-INVENTORY.csv` = read-only system output (regenerable by Get-Inventory)
   - `SOFTWARE-INSTALLATION-INVENTORY.csv` = user-editable copy (input to Generate-Restore-Scripts)
   - This prevents accidental overwrites of user edits
-- **Boolean column**: `Keep (Y/N)` accepts loose matching: `"TRUE|Yes|Y|1"` (case-insensitive via `-match`)
+- **Boolean columns**: 
+  - `Keep (Y/N)` accepts loose matching: `"TRUE|Yes|Y|1"` (case-insensitive via `-match`)
+  - `Backup Settings (Y/N)` independent of Keep column (can backup settings without reinstalling, or vice versa)
 - **Restoration Command**: Full command stored (e.g., `winget install --id foo -e`), not just package ID
 - **Deduplication**: Tracked via `$knownApps` hashtable to prevent duplicates across sources
+- **AppData mapping**: `AppData_Folder_Map.json` records original app folder location for restore operation
 
 ### Directory Structure
 ```
 ./Scripts/
-  Get-Inventory.ps1          # Main inventory scanner
-  Generate-Restore-Scripts.ps1  # Script generator
-  Backup-WSL.ps1             # Backup orchestrator
-  Restore-WSL.ps1            # Restore orchestrator
+  Utils.ps1                        # Shared utilities module (NEW)
+  ApplicationInventory/
+    Get-Inventory.ps1            # Scan Windows/WSL packages (IMPROVED)
+    Generate-Restore-Scripts.ps1 # Build restore commands from CSV (IMPROVED)
+  AppData/
+    Backup-AppData.ps1           # Fuzzy-match and ZIP app configs (IMPROVED)
+    Restore-AppData.ps1          # Unzip settings to original locations (FIXED)
   WSL/
-    backup-dotfiles.sh       # Tar up user dotfiles
-    restore-dotfiles.sh      # Extract dotfiles
-    post-restore-install.sh  # Custom post-install hooks
-./Inventories/              # CSVs and system info
-./Installers/               # Generated restore scripts
-./Logs/                      # Timestamped transcript logs
+    Backup-WSL.ps1               # Export distro + dotfiles (IMPROVED)
+    Restore-WSL.ps1              # Import distro + restore files (FIXED)
+    backup-dotfiles.sh           # Tar user dotfiles (runs in WSL) (ENHANCED)
+    restore-dotfiles.sh          # Extract dotfiles (runs in WSL) (ENHANCED)
+    post-restore-install.sh      # Custom hooks after restore (ENHANCED)
+
+./BackupRoot/                    # External drive location (default: ../Windows-WSL2-Backup)
+  ├─ Inventory/[timestamp]/      # Generated from Get-Inventory
+  │   ├─ Inventories/            # CSVs and system info
+  │   ├─ Logs/                   # Transcript logs
+  │   └─ Installers/             # Restore_Windows.ps1 + Restore_Linux.sh
+  ├─ WSL/[timestamp]/            # Distro backups
+  │   ├─ distro.tar              # Full distro export
+  │   ├─ dotfiles_*.tar.gz       # User dotfiles archive
+  │   └─ HashReport_*.txt        # SHA256 verification
+  └─ ApplicationData/[timestamp]/ # App settings backups
+      ├─ Backups/                # ZIP files for each app
+      ├─ AppData_Folder_Map.json # Original → backup mapping
+      └─ Logs/                   # AppData backup logs
 ```
 
 ## Critical Workflows & Commands
@@ -148,17 +205,27 @@ Start.ps1 (Main Menu)
 # Start interactive menu (calls scripts based on user choice)
 . .\Start.ps1
 
-# Or call scripts directly
-. .\Scripts\Get-Inventory.ps1
-. .\Scripts\Generate-Restore-Scripts.ps1
-. .\Scripts\Backup-WSL.ps1
-. .\Scripts\Restore-WSL.ps1
+# Or call scripts directly (all import Utils.ps1 automatically)
+. .\Scripts\ApplicationInventory\Get-Inventory.ps1
+. .\Scripts\ApplicationInventory\Generate-Restore-Scripts.ps1
+. .\Scripts\AppData\Backup-AppData.ps1
+. .\Scripts\AppData\Restore-AppData.ps1
+. .\Scripts\WSL\Backup-WSL.ps1
+. .\Scripts\WSL\Restore-WSL.ps1
 ```
 
 ### Manual Testing
 ```powershell
-# Test config loading
-$config = Get-Content .\config.json -Raw | ConvertFrom-Json; $config
+# Test config loading with new Load-Config function
+. .\Scripts\Utils.ps1
+$config = Load-Config; $config
+
+# Test robust path conversion
+ConvertTo-WslPath -WindowsPath "D:\path\to\backup"
+# Should output: /mnt/d/path/to/backup
+
+# Test safe WSL command execution
+Invoke-WslCommand -DistroName "Ubuntu" -Command "echo test"
 
 # Test WSL command execution
 wsl --exec bash -lc "echo 'test'"
@@ -166,19 +233,65 @@ wsl -d Ubuntu -- apt list --installed | head
 
 # Verify paths work cross-platform
 $BackupDir = "D:\Migration-Backups\WSL"
-$wslPath = "/mnt/" + ($BackupDir.Replace(":", "").Replace("\", "/").ToLower())
-# Should output: /mnt/d/migration-backups/wsl
+# Now handled by ConvertTo-WslPath function automatically
 ```
 
 ### Edge Cases & Debugging
-- **WSL not installed**: Scripts fail silently on `wsl --exec` (catch blocks suppress errors); verify with `wsl --list --verbose`
-- **Path encoding**: `Replace(":", "").Replace("\", "/").ToLower()` handles drive letters (C: → c)
-- **Dotfile restore permissions**: `post-restore-install.sh` handles `chown` if needed after extraction
+- **WSL not installed**: Scripts fail with clear error from `Invoke-WslCommand` (includes distro validation)
+- **Path encoding**: `ConvertTo-WslPath` handles all drive letters robustly (C: → c, D: → d, etc.)
+- **Dotfile restore permissions**: `post-restore-install.sh` enhanced with detailed permission fixes for .ssh (700/600) and .config (755/644)
 - **Distro already exists**: Restore warns but proceeds (old install gets overwritten); use `wsl --unregister DISTRO` to remove first
 - **Registry apps**: Marked "Source: Registry (Manual)" because no uninstall command available; must install manually
 - **CSV encoding**: Use UTF-8 without BOM; avoid Excel (converts line endings to CRLF)
-- **Transcript logging**: Check `Logs/Inventory_Log_*.txt` for detailed Get-Inventory output when debugging inventory issues
-- **Hash verification**: Check `migration-backups/WSL/HashReport_*.txt` to verify backup integrity before restore
+- **Transcript logging**: Check logs directory for detailed operation output (now unified via `Start-ScriptLogging`)
+- **Hash verification**: Check `BackupRoot/WSL/HashReport_*.txt` to verify backup integrity before restore
+- **Fuzzy matching limitations**: AppData backup may miss folders if app name differs significantly from folder name; check logs for what was matched
+- **AppData_Folder_Map.json**: If manually editing, ensure JSON syntax is valid (uses `Save-JsonFile`/`Load-JsonFile` for safety)
+
+## Recent Improvements (v2025.12)
+
+### Major Changes
+1. **Utils.ps1 Module Created** (400+ lines, 15 functions)
+   - Centralized utility functions eliminate code duplication
+   - Provides robust patterns for config, path conversion, WSL execution
+   - All scripts import from this single module
+   
+2. **Config Loading Refactored** 
+   - `Load-Config` function replaces inline loading
+   - Proper precedence: settings.json → config.json → hardcoded defaults
+   - More reliable error handling
+
+3. **Path Conversion Hardened**
+   - `ConvertTo-WslPath` replaces fragile inline string manipulation
+   - Handles all drive letters (A-Z) robustly
+   - Tested against edge cases
+
+4. **WSL Command Execution Improved**
+   - `Invoke-WslCommand` provides safe wrapper
+   - Validates distro exists before execution
+   - Consistent error handling across all scripts
+
+5. **Logging Unified**
+   - `Start-ScriptLogging`/`Stop-ScriptLogging` from Utils
+   - Consistent formatting and output paths
+   - Timestamp handling in function
+
+6. **Critical Bugs Fixed**
+   - Get-Inventory: Fixed timestamp variable shadowing ($timestamp reuse)
+   - Generate-Restore-Scripts: Fixed config reference bug ($config.InstallersDirectory)
+   - Restore-AppData: Fixed function definition order (was defined after use)
+   - Restore-WSL: Removed unsafe dot-sourcing of Start.ps1
+
+7. **Enhanced Error Handling**
+   - CSV validation before processing
+   - Registry filtering (SystemComponent check, UninstallString requirement)
+   - Directory creation validation
+   - Better recovery from partial failures
+
+8. **Bash Scripts Enhanced**
+   - backup-dotfiles.sh: Item-by-item logging, archive size reporting
+   - restore-dotfiles.sh: Permission hardening (.ssh: 700/600, .config: 755/644)
+   - post-restore-install.sh: Package installation diagnosis, individual fallback
 
 ## Extension Points & Common Tasks
 

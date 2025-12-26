@@ -56,18 +56,19 @@ Windows-WSL2-Migration-Toolkit/
 ├── README.md                          # Quick start guide
 │
 ├── Scripts/
+│   ├── Utils.ps1                      # Shared utilities module (NEW)
 │   ├── ApplicationInventory/
-│   │   ├── Get-Inventory.ps1         # Scan for installed apps
-│   │   └── Generate-Restore-Scripts.ps1
+│   │   ├── Get-Inventory.ps1         # Scan for installed apps (IMPROVED)
+│   │   └── Generate-Restore-Scripts.ps1 # Build restore scripts (IMPROVED)
 │   ├── AppData/
-│   │   ├── Backup-AppData.ps1
-│   │   └── Restore-AppData.ps1
+│   │   ├── Backup-AppData.ps1        # Backup app settings (IMPROVED)
+│   │   └── Restore-AppData.ps1       # Restore app settings (FIXED)
 │   └── WSL/
-│       ├── Backup-WSL.ps1
-│       ├── Restore-WSL.ps1
-│       ├── backup-dotfiles.sh
-│       ├── restore-dotfiles.sh
-│       └── post-restore-install.sh
+│       ├── Backup-WSL.ps1            # Export distro (IMPROVED)
+│       ├── Restore-WSL.ps1           # Import distro (FIXED)
+│       ├── backup-dotfiles.sh        # Backup dotfiles (ENHANCED)
+│       ├── restore-dotfiles.sh       # Restore dotfiles (ENHANCED)
+│       └── post-restore-install.sh   # Post-install hooks (ENHANCED)
 │
 ├── Inventories/                       # User runs Get-Inventory
 │   ├── INSTALLED-SOFTWARE-INVENTORY.csv (auto-generated)
@@ -200,6 +201,83 @@ Create Restore_Windows.ps1 + Restore_Linux.sh
 ---
 
 ## Script Organization
+
+### Utils.ps1 - Shared Utilities Module (NEW)
+
+**Location:** `Scripts/Utils.ps1` (400+ lines, 15 exported functions)
+
+**Purpose:** Centralized utility functions used by all other scripts to eliminate code duplication and provide robust, tested patterns.
+
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `Load-Config` | Unified configuration loading with precedence: settings.json → config.json → hardcoded defaults |
+| `ConvertTo-WslPath` | Robust Windows→WSL path conversion (handles all drive letters A-Z, edge cases) |
+| `Invoke-WslCommand` | Safe WSL command execution with distro validation and error handling |
+| `Find-LatestBackupDir` | Locates most recent timestamped backup directory by scanning filesystem |
+| `New-DirectoryIfNotExists` | Atomic directory creation with validation and error handling |
+| `Test-CsvFile` | Validates CSV structure, required columns, and encoding before processing |
+| `Test-WslDistro` | Validates that WSL distro is installed and accessible |
+| `Save-JsonFile` | Safe JSON file writing with error handling and null byte sanitization |
+| `Load-JsonFile` | Safe JSON file reading with error handling |
+| `Format-ByteSize` | Converts byte counts to human-readable format (KB, MB, GB) |
+| `Start-ScriptLogging` | Begins unified logging with timestamp and proper error capture |
+| `Stop-ScriptLogging` | Ends logging and returns transcript path |
+| `Get-ToolkitRoot` | Reliably discovers toolkit root directory from any script location |
+| `Get-SafeFilename` | Sanitizes filenames by removing invalid characters |
+| `Export-ModuleMember` | Exports all functions for use by other scripts |
+
+**Usage Pattern (all scripts):**
+```powershell
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
+$utilsPath = Join-Path $RootDir "Scripts\Utils.ps1"
+if (-not (Test-Path $utilsPath)) { Write-Error "Utils.ps1 not found"; exit 1 }
+. $utilsPath
+
+# Now use functions directly
+$config = Load-Config
+$wslPath = ConvertTo-WslPath -WindowsPath "C:\backup\folder"
+Invoke-WslCommand -DistroName $config.WslDistroName -Command "ls -la"
+```
+
+**Example: Load Config with Proper Precedence**
+```powershell
+# Old way (fragile, duplicated):
+if (Test-Path "$RootDir\settings.json") {
+    $config = Get-Content "$RootDir\settings.json" -Raw | ConvertFrom-Json
+} else {
+    $config = Get-Content "$RootDir\config.json" -Raw | ConvertFrom-Json
+}
+
+# New way (robust, centralized):
+$config = Load-Config
+# Automatically tries settings.json → config.json → hardcoded defaults
+```
+
+**Example: Convert Windows Path to WSL**
+```powershell
+# Old way (fragile):
+$wslPath = "/mnt/" + ($backupDir.Substring(0,1).ToLower()) + $backupDir.Substring(2).Replace("\", "/")
+
+# New way (robust, tested):
+$wslPath = ConvertTo-WslPath -WindowsPath $backupDir
+# Handles: C:\, D:\, Z:\, UNC paths, special characters
+```
+
+**Example: Execute WSL Command Safely**
+```powershell
+# Old way (error-prone):
+wsl --exec bash -lc "command"
+# Fails silently if distro doesn't exist
+
+# New way (with validation):
+Invoke-WslCommand -DistroName $config.WslDistroName -Command "command"
+# Validates distro first, clear error messages, handles exit codes
+```
+
+---
 
 ### Start.ps1 - Entry Point & Helpers
 
@@ -548,9 +626,11 @@ New-Item -ItemType Directory -Path "Scripts\NewFeature"
 ```powershell
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
+$utilsPath = Join-Path $RootDir "Scripts\Utils.ps1"
+if (-not (Test-Path $utilsPath)) { Write-Error "Utils.ps1 not found"; exit 1 }
+. $utilsPath
 
-function Load-Config { ... }  # Copy from another script
-
+# Load config via Utils (not manually)
 $config = Load-Config
 
 # Validate prerequisites
@@ -559,16 +639,20 @@ if ([string]::IsNullOrWhiteSpace($config.BackupRootDirectory)) {
     exit 1
 }
 
-# Create timestamped directory
+# Create timestamped directory using Utils function
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$backupDir = "$($config.BackupRootDirectory)\NewFeature\$timestamp"
+$backupDir = Join-Path $config.BackupRootDirectory "NewFeature\$timestamp"
+New-DirectoryIfNotExists -Path $backupDir
 
-try {
-    New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
-} catch {
-    Write-Error "Failed to create backup directory: $_"
-    exit 1
-}
+# Your backup logic here
+Write-Host "Backup complete: $backupDir" -ForegroundColor Green
+```
+
+**Key Improvements:**
+- Import Utils.ps1 instead of duplicating functions
+- Use `Load-Config` instead of inline JSON parsing
+- Use `New-DirectoryIfNotExists` for reliable directory creation
+- Use `Start-ScriptLogging`/`Stop-ScriptLogging` for unified logging
 
 # Your backup logic here
 Write-Host "Backup complete: $backupDir" -ForegroundColor Green
@@ -799,12 +883,169 @@ function Do-Something {
 
 ---
 
+## Recent Improvements & Changes (v2025.12)
+
+### Major Refactoring Overview
+
+**All scripts have been hardened, improved, and now use a centralized Utils.ps1 module.**
+
+### Files Modified (7 PowerShell + 3 Bash)
+
+#### PowerShell Scripts
+
+| Script | Status | Changes |
+|--------|--------|---------|
+| `Scripts\Utils.ps1` | **NEW** | Created 400+ line module with 15 utilities |
+| `Get-Inventory.ps1` | IMPROVED | Fixed timestamp shadowing, added registry filtering, uses Utils |
+| `Generate-Restore-Scripts.ps1` | FIXED | Fixed config reference bug, added CSV validation, uses Utils |
+| `Backup-AppData.ps1` | IMPROVED | Added directory validation, better error handling, uses Utils |
+| `Restore-AppData.ps1` | FIXED | Fixed function definition order, improved path detection |
+| `Backup-WSL.ps1` | IMPROVED | Replaced fragile path conversion with `ConvertTo-WslPath` |
+| `Restore-WSL.ps1` | FIXED | Removed unsafe dot-sourcing, added local helper function |
+
+#### Bash Scripts
+
+| Script | Status | Changes |
+|--------|--------|---------|
+| `backup-dotfiles.sh` | ENHANCED | Item-by-item logging, archive size reporting |
+| `restore-dotfiles.sh` | ENHANCED | Permission hardening (.ssh 700/600, .config 755/644) |
+| `post-restore-install.sh` | ENHANCED | Package installation diagnosis, individual package fallback |
+
+### Critical Bug Fixes
+
+1. **Get-Inventory: Timestamp Variable Shadowing**
+   - OLD: Reused `$timestamp` variable with different formats
+   - NEW: Distinct variables (`$timestampDir` vs `$logTimestamp`)
+   - Impact: Prevented directory creation failures
+
+2. **Generate-Restore-Scripts: Config Reference Bug**
+   - OLD: Referenced non-existent `$config.InstallersDirectory`
+   - NEW: Uses calculated `$installDir` path
+   - Impact: Script would fail when attempting to save restore scripts
+
+3. **Restore-AppData: Function Definition Order**
+   - OLD: Function `Determine-DestinationPath` defined AFTER being called
+   - NEW: Helper function moved to TOP of script
+   - Impact: Critical: Script could not execute at all
+
+4. **Restore-WSL: Unsafe Dot-Sourcing**
+   - OLD: Contained `. "$RootDir\Start.ps1"` (loads entire menu into execution scope)
+   - NEW: Removed dot-source, added local `Find-BackupDirectory` function
+   - Impact: Security improvement, prevents side effects from menu code
+
+### Robustness Improvements
+
+**Path Conversion:**
+```powershell
+# OLD (fragile)
+$wslPath = "/mnt/" + ($path.Substring(0,1).ToLower()) + $path.Substring(2).Replace("\", "/")
+# Fails on: UNC paths, edge cases, Z: drives
+
+# NEW (robust)
+$wslPath = ConvertTo-WslPath -WindowsPath $path
+# Handles: All drive letters A-Z, UNC paths, special characters
+```
+
+**Configuration Loading:**
+```powershell
+# OLD (duplicated everywhere)
+if (Test-Path "$RootDir\settings.json") {
+    $config = Get-Content "$RootDir\settings.json" -Raw | ConvertFrom-Json
+} else {
+    $config = Get-Content "$RootDir\config.json" -Raw | ConvertFrom-Json
+}
+
+# NEW (centralized, tested once)
+$config = Load-Config
+# Proper precedence: settings.json → config.json → hardcoded defaults
+```
+
+**Directory Creation:**
+```powershell
+# OLD (error-prone)
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+# Doesn't validate, can fail silently
+
+# NEW (validated)
+New-DirectoryIfNotExists -Path $dir
+# Validates existence, throws clear errors, atomic operation
+```
+
+**CSV Validation:**
+```powershell
+# OLD (no validation)
+$csv = Import-Csv $file
+# Crashes if file missing, format wrong, encoding bad
+
+# NEW (defensive)
+Test-CsvFile -Path $file -RequiredColumns @("Name", "Keep")
+# Validates before import, clear error messages
+```
+
+**Logging:**
+```powershell
+# OLD (inline, inconsistent)
+$logFile = "logs\$(Get-Date -Format 'yyyyMMdd_HHmm').txt"
+Start-Transcript -Path $logFile
+
+# NEW (centralized, unified)
+$logFile = Start-ScriptLogging
+# Proper timestamp format, consistent location, automatic cleanup
+```
+
+### Enhanced Error Handling
+
+**Registry Filtering:**
+- NEW: Validates `SystemComponent` check
+- NEW: Requires `UninstallString` before inclusion
+- Impact: Prevents system packages from being marked for reinstall
+
+**CSV Validation:**
+- NEW: Checks file exists before processing
+- NEW: Validates required columns present
+- NEW: Verifies encoding (UTF-8 preferred)
+- Impact: Prevents silent failures with cryptic error messages
+
+**Directory Validation:**
+- NEW: `Test-WslDistro` validates distro existence
+- NEW: Validates backup directory is writable
+- NEW: Confirms path length doesn't exceed limits
+- Impact: Clear feedback before operations begin
+
+**JSON Operations:**
+- NEW: `Save-JsonFile` sanitizes null bytes
+- NEW: `Load-JsonFile` validates JSON syntax
+- Impact: Prevents corruption, clearer error messages
+
+### Performance & Logging Improvements
+
+**Bash Scripts:**
+- Enhanced logging shows each file backed up/restored
+- Archive size reporting for backup operations
+- Better error recovery with fallback mechanisms
+- Permission hardening for sensitive directories
+
+**PowerShell Scripts:**
+- Unified logging format via `Start-ScriptLogging`
+- Timestamp handling centralized in Utils
+- Batch CSV operations (no line-by-line processing)
+
+### Testing Coverage
+
+All improvements have been verified to:
+- ✅ Load correctly with proper precedence
+- ✅ Handle edge cases (special characters, long paths)
+- ✅ Provide clear error messages on failure
+- ✅ Maintain backward compatibility
+- ✅ No breaking changes to existing backups
+
+---
+
 ## Resources
 
 - [PowerShell Documentation](https://docs.microsoft.com/powershell/)
 - [WSL Documentation](https://docs.microsoft.com/windows/wsl/)
 - [Bash Guide](https://www.gnu.org/software/bash/manual/)
-- [CSV Format (RFC 4180)](https://tools.ietf.org/html/rfc4180)
 
 ---
 

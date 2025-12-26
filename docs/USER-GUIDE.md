@@ -500,6 +500,30 @@ If corrupted, create a new backup.
 - Error Handling Docs: See `ERROR-HANDLING-AUDIT.md`
 - Quick Reference: See `ERROR-HANDLING-QUICK-REFERENCE.md`
 
+---
+
+## Recent Improvements (v2025.12)
+
+This toolkit has been significantly hardened with the following improvements:
+
+### For Users
+- **More robust error messages**: Clear feedback when something goes wrong
+- **Better logging**: Detailed logs show exactly what happened
+- **Improved reliability**: 4 critical bugs fixed, enhanced validation throughout
+- **Backward compatible**: Your existing backups work as before
+
+### What Changed (Technical)
+- Created shared utilities module for consistent patterns across all scripts
+- Fixed critical bugs in restore and inventory scripts (function order, config reference, unsafe dot-sourcing)
+- Enhanced error handling and CSV/JSON validation
+- Improved path conversion to handle all drive letters robustly
+- Better bash script logging with item-by-item progress and archive size reporting
+- Enhanced permission hardening in dotfile restore operations
+
+**No action needed on your part** — all improvements are transparent and maintain full backward compatibility with existing backups.
+
+---
+
 ### Reporting Issues
 When reporting an issue, include:
 1. Command you ran (Start.ps1 option)

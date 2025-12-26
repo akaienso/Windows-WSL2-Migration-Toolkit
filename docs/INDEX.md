@@ -4,6 +4,22 @@ Welcome to the Windows-WSL2-Migration-Toolkit documentation. Start here to find 
 
 ---
 
+## ⭐ What's New (v2025.12)
+
+The toolkit has been significantly improved with **critical bug fixes and robustness enhancements**:
+
+- ✅ **New Utils.ps1 module** with 15 shared utility functions
+- ✅ **4 critical bugs fixed** in restore and inventory scripts
+- ✅ **Robust path conversion** for all drive letters (A-Z)
+- ✅ **Enhanced error handling** with better validation
+- ✅ **Improved logging** with unified formatting
+- ✅ **Better bash scripts** with detailed progress and permission hardening
+- ✅ **Fully backward compatible** — existing backups work as before
+
+See [DEVELOPER-GUIDE.md#recent-improvements](DEVELOPER-GUIDE.md#recent-improvements--changes-v202512) for detailed technical changes.
+
+---
+
 ## 🚀 For End Users
 
 **New to the toolkit?** Start here:
