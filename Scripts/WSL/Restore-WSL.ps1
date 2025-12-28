@@ -101,6 +101,59 @@ Write-Host "Source: $($BackupDir.FullName)" -ForegroundColor Yellow
 Write-Host "Distro: $Distro" -ForegroundColor Yellow
 Write-Host "Destination: $InstallLocation" -ForegroundColor Yellow
 
+# ===== CRITICAL SAFETY CHECK =====
+Write-Host "`n╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Red
+Write-Host "║                    ⚠️  CRITICAL WARNING  ⚠️                     ║" -ForegroundColor Red
+Write-Host "║                                                              ║" -ForegroundColor Red
+Write-Host "║  This will OVERWRITE your existing WSL distro: $Distro" -ForegroundColor Red
+Write-Host "║  Any unsaved data in your current distro will be LOST.      ║" -ForegroundColor Red
+Write-Host "║                                                              ║" -ForegroundColor Red
+Write-Host "║  OPTIONS:                                                    ║" -ForegroundColor Red
+Write-Host "║    1. Restore to ORIGINAL distro (overwrites current)       ║" -ForegroundColor Red
+Write-Host "║    2. TEST restore to temporary distro (RECOMMENDED)        ║" -ForegroundColor Red
+Write-Host "║    3. CANCEL (do nothing)                                   ║" -ForegroundColor Red
+Write-Host "║                                                              ║" -ForegroundColor Red
+Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Red
+
+$choice = Read-Host "`nSelect option (1/2/3)"
+
+if ($choice -eq "3") {
+    Write-Host "`n✓ Restore cancelled." -ForegroundColor Green
+    exit 0
+}
+
+if ($choice -eq "2") {
+    # Test restore to temporary distro
+    $TestDistro = "$($Distro)-TEST-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+    $TestInstallLocation = "C:\WSL\$TestDistro"
+    
+    Write-Host "`n⚠️  Testing restore to temporary distro: $TestDistro" -ForegroundColor Yellow
+    Write-Host "If successful, you can then safely restore to the original distro." -ForegroundColor Cyan
+    Write-Host "This temporary distro can be deleted afterward with:" -ForegroundColor Cyan
+    Write-Host "  wsl --unregister $TestDistro" -ForegroundColor DarkGray
+    
+    # Use test names for the restore
+    $Distro = $TestDistro
+    $InstallLocation = $TestInstallLocation
+    
+    Write-Host "`nProceeding with TEST restore..." -ForegroundColor Yellow
+} elseif ($choice -eq "1") {
+    # Confirm overwrite of original
+    Write-Host "`n⚠️  You selected DIRECT OVERWRITE of your existing distro." -ForegroundColor Red
+    Write-Host "`nType the distro name exactly to confirm: " -ForegroundColor Red -NoNewline
+    $confirm = Read-Host
+    
+    if ($confirm -ne $config.WslDistroName) {
+        Write-Host "`n✗ Confirmation failed. Restore cancelled." -ForegroundColor Red
+        exit 1
+    }
+    
+    Write-Host "`nProceeding with direct overwrite..." -ForegroundColor Yellow
+} else {
+    Write-Error "Invalid selection. Restore cancelled."
+    exit 1
+}
+
 # 1. Find Backups
 Write-Host "`nSearching for backup files..." -ForegroundColor Yellow
 $FullBackup = Get-ChildItem "$($BackupDir.FullName)\WslBackup_*.tar" -ErrorAction SilentlyContinue | 
