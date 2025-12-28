@@ -331,3 +331,55 @@ Edit `config.json` → `WslDistroName` and verify distro has `apt` (scripts assu
 - Registry apps require manual search before install
 - Distro import overwrites existing installation without backup
 - No rollback mechanism if restore fails mid-process
+
+## Session 2 (Dec 28, 2025) - Daily To-Do List
+
+**Status: In Progress**
+
+### Completed Yesterday
+- ✅ Utils.ps1 syntax errors fixed (line 100 variable escaping ${LASTEXITCODE}:, Export-ModuleMember removed)
+- ✅ Start.ps1 menu loads and displays successfully
+- ✅ All code changes committed and pushed
+
+### Today's Priority Tasks
+- [ ] **Test Get-Inventory.ps1 execution** (Option 1)
+  - Verify script loads Utils.ps1 successfully
+  - Verify it scans Windows apps (Winget, Store, Registry)
+  - Verify it scans WSL apps (apt packages)
+  - Verify INSTALLED-SOFTWARE-INVENTORY.csv is created
+  - Location: Inventories/[timestamp]/Inventories/INSTALLED-SOFTWARE-INVENTORY.csv
+
+- [ ] **Test Generate-Restore-Scripts.ps1** (Option 2)
+  - Verify it reads SOFTWARE-INSTALLATION-INVENTORY.csv (user-edited input)
+  - Verify it generates Restore_Windows.ps1 with winget commands
+  - Verify it generates Restore_Linux.sh with apt commands
+  - Location: Inventories/[timestamp]/Installers/
+
+- [ ] **Test Backup-WSL.ps1** (Option 3)
+  - Verify distro export to WSL/[timestamp]/distro.tar
+  - Verify dotfiles backup via backup-dotfiles.sh
+  - Verify SHA256 hash report generated
+
+- [ ] **Test Restore-WSL.ps1** (Option 4)
+  - Verify distro import from latest backup
+  - Verify dotfiles restoration via restore-dotfiles.sh
+  - Verify post-restore-install.sh hooks execute
+
+- [ ] **Test Backup-AppData.ps1** (Option 5)
+  - Verify fuzzy matching of app folders in %APPDATA% and %LOCALAPPDATA%
+  - Verify ZIP creation for matched folders
+  - Verify AppData_Folder_Map.json generated
+
+- [ ] **Test Restore-AppData.ps1** (Option 6)
+  - Verify ZIPs extracted to original locations
+  - Verify file permissions preserved
+  - Verify pre-restore backup created
+
+### Known Issues to Fix
+- None identified yet (Utils.ps1 fixes are in place)
+
+### Testing Notes
+- All tests should be run interactively via Start.ps1 menu
+- Check Logs/ directory for detailed operation logs
+- Verify CSV outputs before proceeding to restore scripts
+- Document any errors encountered and root cause
