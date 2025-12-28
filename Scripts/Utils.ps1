@@ -97,7 +97,7 @@ function Invoke-WslCommand {
     }
     
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "WSL command failed with exit code $LASTEXITCODE: $Command"
+        Write-Error "WSL command failed with exit code ${LASTEXITCODE}: $Command"
         return $false
     }
     
@@ -371,20 +371,5 @@ function Get-ToolkitRoot {
     return $null
 }
 
-Export-ModuleMember -Function @(
-    'Load-Config',
-    'ConvertTo-WslPath',
-    'Invoke-WslCommand',
-    'Find-LatestBackupDir',
-    'New-DirectoryIfNotExists',
-    'Test-CsvFile',
-    'ConvertTo-Hashtable',
-    'Save-JsonFile',
-    'Load-JsonFile',
-    'Test-WslDistro',
-    'Get-SafeFilename',
-    'Format-ByteSize',
-    'Start-ScriptLogging',
-    'Stop-ScriptLogging',
-    'Get-ToolkitRoot'
-)
+# Export all functions (make them available to calling scripts)
+# Note: In a .ps1 script, these are automatically available after dot-sourcing
