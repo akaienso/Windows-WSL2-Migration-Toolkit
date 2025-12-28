@@ -4,5 +4,42 @@
   "LogDirectory": "Logs",
   "ScriptDirectory": "Scripts",
   "InventoryOutputCSV": "INSTALLED-SOFTWARE-INVENTORY.csv",
-  "InventoryInputCSV": "SOFTWARE-INSTALLATION-INVENTORY.csv"
+  "InventoryInputCSV": "SOFTWARE-INSTALLATION-INVENTORY.csv",
+  "AppSelectionProfile": {
+    "Name": "Default",
+    "LastUpdated": null,
+    "SelectedApps": {
+      "Windows": [],
+      "WSL": []
+    },
+    "AppsToSkip": []
+  },
+  "AppDataBackupProfile": {
+    "Name": "Default",
+    "LastUpdated": null,
+    "SelectedApps": [],
+    "FolderMappings": {},
+    "ExcludePatterns": [".cache", "node_modules", "temp"]
+  },
+  "HomeDirectoryProfile": {
+    "Name": "Default",
+    "LastUpdated": null,
+    "SelectedDirectories": [],
+    "ExcludePatterns": [".cache", ".local/share/trash", "snap/*", ".viminfo"],
+    "PresetProfiles": {
+      "Essential": {
+        "Description": "Critical config files only",
+        "Directories": [".ssh", ".bashrc", ".zshrc", ".profile", ".gitconfig"]
+      },
+      "Standard": {
+        "Description": "Essential + common directories",
+        "Directories": [".ssh", ".bashrc", ".zshrc", ".profile", ".gitconfig", ".config", ".local", "Documents", "Pictures"]
+      },
+      "Full": {
+        "Description": "Everything except caches and trash",
+        "Directories": ["*"],
+        "ExcludePatterns": [".cache", ".local/share/trash", "snap/*", ".viminfo"]
+      }
+    }
+  }
 }

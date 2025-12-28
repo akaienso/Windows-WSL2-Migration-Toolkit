@@ -417,15 +417,18 @@ function Show-Menu {
     Write-Host "========================================================" -ForegroundColor Cyan
     Write-Host "      SYSTEM MIGRATION TOOLKIT" -ForegroundColor Cyan
     Write-Host "========================================================" -ForegroundColor Cyan
-    Write-Host "  Scripts:    \$($currentConfig.ScriptDirectory)" -ForegroundColor DarkGray
-    Write-Host "  Ext Backup: $($currentConfig.ExternalBackupRoot)" -ForegroundColor DarkGray
+    Write-Host "  Scripts:    $($currentConfig.ScriptDirectory)" -ForegroundColor DarkGray
+    Write-Host "  Backup Root: $($currentConfig.BackupRootDirectory)" -ForegroundColor DarkGray
     Write-Host "--------------------------------------------------------" -ForegroundColor Cyan
     Write-Host "1. Generate Application Inventory (Windows + WSL Apps)" -ForegroundColor Yellow
-    Write-Host "2. Generate Installation Scripts" -ForegroundColor Yellow
-    Write-Host "3. Backup WSL System (Full Distro Export)" -ForegroundColor Magenta
-    Write-Host "4. Restore WSL System" -ForegroundColor Magenta
-    Write-Host "5. Backup AppData Settings" -ForegroundColor Cyan
-    Write-Host "6. Restore AppData Settings" -ForegroundColor Cyan
+    Write-Host "2. Select Apps to Restore (Interactive)" -ForegroundColor Yellow
+    Write-Host "3. Generate Installation Scripts" -ForegroundColor Yellow
+    Write-Host "4. Backup WSL System (Full Distro Export)" -ForegroundColor Magenta
+    Write-Host "5. Restore WSL System" -ForegroundColor Magenta
+    Write-Host "6. Backup Home Directory (Configs/Dotfiles)" -ForegroundColor Cyan
+    Write-Host "7. Restore Home Directory" -ForegroundColor Cyan
+    Write-Host "8. Backup AppData Settings" -ForegroundColor Green
+    Write-Host "9. Restore AppData Settings" -ForegroundColor Green
     Write-Host "Q. Quit" -ForegroundColor White
     Write-Host "========================================================" -ForegroundColor Cyan
 }
@@ -441,16 +444,14 @@ do {
         "1" { 
             Clear-Host; $target = "$scriptPath\ApplicationInventory\Get-Inventory.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
-            Write-Host "`n✓ Inventory complete! Next steps:" -ForegroundColor Green
-            Write-Host "  1. Go to Inventories/ folder" -ForegroundColor Cyan
-            Write-Host "  2. Copy 'INSTALLED-SOFTWARE-INVENTORY.csv'" -ForegroundColor Cyan
-            Write-Host "     → 'SOFTWARE-INSTALLATION-INVENTORY.csv'" -ForegroundColor Cyan
-            Write-Host "  3. Edit with Google Sheets (recommended, see README)" -ForegroundColor Cyan
-            Write-Host "  4. Set 'Keep' to TRUE for packages to restore" -ForegroundColor Cyan
-            Write-Host "  5. Save and return to this menu → Option 2" -ForegroundColor Cyan
             Pause
         }
         "2" { 
+            Clear-Host; $target = "$scriptPath\ApplicationInventory\Select-Apps-Interactive.ps1"
+            if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
+            Pause
+        }
+        "3" { 
             Clear-Host; $target = "$scriptPath\ApplicationInventory\Generate-Restore-Scripts.ps1"
             
             # Find the most recent timestamped inventory directory
@@ -468,66 +469,47 @@ do {
                 return
             }
             
-            $inputFile = "$($latestDir.FullName)\Inventories\$($currentConfig.InventoryInputCSV)"
-            
-            # If input file doesn't exist but output file does, create the input file
-            if (-not (Test-Path $inputFile)) {
-                $outputFile = "$($latestDir.FullName)\Inventories\$($currentConfig.InventoryOutputCSV)"
-                if (Test-Path $outputFile) {
-                    Write-Host "Creating editable copy of inventory..." -ForegroundColor Yellow
-                    Copy-Item -Path $outputFile -Destination $inputFile -Force
-                    Write-Host "✓ Created: $inputFile" -ForegroundColor Green
-                    Write-Host "`n⚠ IMPORTANT: Review the CSV before proceeding." -ForegroundColor Cyan
-                    Write-Host "  • Set 'Keep (Y/N)' to TRUE for apps you want to reinstall" -ForegroundColor White
-                    Write-Host "`nEdit the file in: $($latestDir.FullName)\Inventories\" -ForegroundColor Cyan
-                    Write-Host "Then run Option 2 again when done." -ForegroundColor Cyan
-                    Pause
-                    return
-                } else {
-                    Write-Host "`n⚠ No inventory files found in: $($latestDir.FullName)\Inventories\" -ForegroundColor Red
-                    Write-Host "Run Option 1 again to regenerate inventory." -ForegroundColor Cyan
-                    Pause
-                    return
-                }
-            }
-            
-            # File found, run the script
-            Write-Host "Found inventory: $inputFile" -ForegroundColor Green
-            
-            # Run script with the inputFile path
             if (Test-Path $target) { 
-                & $target -InputFile $inputFile
+                & $target
             } else { 
                 Write-Error "Missing: $target" 
             }
-            Write-Host "`n✓ Restore scripts generated!" -ForegroundColor Green
-            Write-Host "  Location: $($latestDir.FullName)\Installers\" -ForegroundColor Cyan
             Pause
         }
-        "3" {
+        "4" {
             Clear-Host; $target = "$scriptPath\WSL\Backup-WSL.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Pause
         }
-        "4" {
+        "5" {
             Clear-Host; $target = "$scriptPath\WSL\Restore-WSL.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Pause
         }
-        "5" {
+        "6" {
+            Clear-Host; $target = "$scriptPath\WSL\Backup-HomeDirectory.ps1"
+            if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
+            Write-Host "`n✓ Home directory backup complete!" -ForegroundColor Green
+            Write-Host "  Profile saved to settings.json" -ForegroundColor Cyan
+            Pause
+        }
+        "7" {
+            Clear-Host; $target = "$scriptPath\WSL\Restore-HomeDirectory.ps1"
+            if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
+            Write-Host "`n✓ Home directory restore complete!" -ForegroundColor Green
+            Pause
+        }
+        "8" {
             Clear-Host; $target = "$scriptPath\AppData\Backup-AppData.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Write-Host "`n✓ AppData backup complete!" -ForegroundColor Green
-            Write-Host "  Backups saved to: $($currentConfig.ExternalBackupRoot)\AppData_Backups" -ForegroundColor Cyan
-            Write-Host "  Review the log file for details on what was backed up." -ForegroundColor Cyan
+            Write-Host "  Profile saved to settings.json" -ForegroundColor Cyan
             Pause
         }
-        "6" {
+        "9" {
             Clear-Host; $target = "$scriptPath\AppData\Restore-AppData.ps1"
             if (Test-Path $target) { & $target } else { Write-Error "Missing: $target" }
             Write-Host "`n✓ AppData restore complete!" -ForegroundColor Green
-            Write-Host "  Settings have been restored to their original locations." -ForegroundColor Cyan
-            Write-Host "  You may need to restart applications to see the changes." -ForegroundColor Cyan
             Pause
         }
         "Q" { exit }

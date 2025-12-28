@@ -152,3 +152,18 @@ if (Test-Path $wingetJsonPath) { Remove-Item $wingetJsonPath -Force -ErrorAction
 Stop-ScriptLogging
 Write-Host "`nSUCCESS! Inventory saved to: $csvPath" -ForegroundColor Green
 Write-Host "Log file: $logFile" -ForegroundColor DarkGray
+
+# ===== LAUNCH INTERACTIVE SELECTION =====
+Write-Host "`n=== NEXT STEP ===" -ForegroundColor Cyan
+Write-Host "Run Option 2 to interactively select which apps to restore (or run manually):" -ForegroundColor Yellow
+Write-Host "  . $RootDir\Scripts\ApplicationInventory\Select-Apps-Interactive.ps1" -ForegroundColor DarkGray
+
+Write-Host "`nWould you like to continue with app selection now? (Y/N): " -ForegroundColor Cyan -NoNewline
+$continueSelection = Read-Host
+
+if ($continueSelection -match "^(Y|Yes|1)$") {
+    Write-Host "`nLaunching app selection..." -ForegroundColor Green
+    & (Join-Path $RootDir "Scripts\ApplicationInventory\Select-Apps-Interactive.ps1")
+} else {
+    Write-Host "App selection deferred. Run it later when ready." -ForegroundColor Yellow
+}
