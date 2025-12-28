@@ -2,11 +2,12 @@
 # SCRIPT: Generate-Restore-Scripts.ps1
 # Purpose: Read inventory CSV and generate restore scripts for Windows and Linux
 # ==============================================================================
-$ErrorActionPreference = 'Stop'
 
 param(
     [string]$InputFile = ""
 )
+
+$ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
