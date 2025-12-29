@@ -194,6 +194,61 @@ if (-not (Save-JsonFile -Data $settings -FilePath (Join-Path $RootDir "settings.
     Write-Host "⚠ Warning: Could not save profile" -ForegroundColor Yellow
 }
 
+# ===== ESTIMATE STORAGE REQUIREMENTS =====
+Write-Host "`n💾 Estimating storage requirements..." -ForegroundColor Yellow
+
+# Build du command to get total size for selected directories
+$duDirs = $selectedDirs -join '" "' 
+$estimateCmd = @"
+cd \$HOME && du -sh $duDirs 2>/dev/null | awk '{sum+=\$1} END {print sum}'
+"@
+
+$sizeEstimate = $null
+try {
+    # Get detailed sizes per directory
+    $detailCmd = @"
+cd \$HOME && for dir in $($selectedDirs -join ' '); do 
+  [ -d "\$dir" ] && du -sh "\$dir" 2>/dev/null || true
+done
+"@
+    $sizesPerDir = wsl -d $config.WslDistroName -- bash -lc $detailCmd 2>$null
+    
+    Write-Host "`n📊 Storage per directory:" -ForegroundColor Cyan
+    $totalSizeStr = "0"
+    foreach ($line in @($sizesPerDir) | Where-Object { $_ -match '\w+' }) {
+        if ($line -match '^([\d.]+[KMGT]?)\s+(.+)$') {
+            $size = $matches[1]
+            $dir = $matches[2]
+            Write-Host "  • $dir`: $size" -ForegroundColor White
+        }
+    }
+    
+    # Get total uncompressed size
+    $totalCmd = @"
+cd \$HOME && du -sh $($selectedDirs -join ' ') 2>/dev/null | tail -1 | awk '{print \$1}'
+"@
+    $totalSize = wsl -d $config.WslDistroName -- bash -lc $totalCmd 2>$null | ForEach-Object { $_.Trim() }
+    
+    if ($totalSize) {
+        Write-Host "`n  Total uncompressed: $totalSize" -ForegroundColor Yellow
+        Write-Host "  (Compressed archive will be smaller)" -ForegroundColor DarkGray
+    }
+} catch {
+    Write-Host "⚠ Could not estimate sizes: $_" -ForegroundColor Yellow
+}
+
+# ===== CONFIRM BEFORE BACKUP =====
+Write-Host "`n⚠ Ready to create backup" -ForegroundColor Cyan
+Write-Host "  Destination: $homeBackupDir" -ForegroundColor White
+Write-Host "`nProceed with backup? (Y/N): " -ForegroundColor Yellow -NoNewline
+$confirm = Read-Host
+
+if ($confirm -notmatch "^(Y|Yes|1)$") {
+    Write-Host "Backup cancelled." -ForegroundColor Yellow
+    Stop-ScriptLogging
+    exit 0
+}
+
 # ===== CREATE BACKUP SCRIPT FOR WSL =====
 Write-Host "`n📦 Creating home directory backup..." -ForegroundColor Yellow
 
