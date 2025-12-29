@@ -198,13 +198,13 @@ if ($null -eq $settings) {
     $settings = @{}
 }
 
-if (-not $settings.ContainsKey("HomeDirectoryProfile")) {
-    $settings["HomeDirectoryProfile"] = @{}
+if (-not ($settings.PSObject.Properties.Name -contains "HomeDirectoryProfile")) {
+    $settings | Add-Member -NotePropertyName "HomeDirectoryProfile" -NotePropertyValue @{}
 }
 
-$settings["HomeDirectoryProfile"]["Name"] = "Default"
-$settings["HomeDirectoryProfile"]["LastUpdated"] = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
-$settings["HomeDirectoryProfile"]["SelectedDirectories"] = $selectedDirs
+$settings.HomeDirectoryProfile | Add-Member -NotePropertyName "Name" -NotePropertyValue "Default" -Force
+$settings.HomeDirectoryProfile | Add-Member -NotePropertyName "LastUpdated" -NotePropertyValue (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ") -Force
+$settings.HomeDirectoryProfile | Add-Member -NotePropertyName "SelectedDirectories" -NotePropertyValue $selectedDirs -Force
 
 if (-not (Save-JsonFile -Data $settings -FilePath (Join-Path $RootDir "settings.json"))) {
     Write-Host "⚠ Warning: Could not save profile" -ForegroundColor Yellow
