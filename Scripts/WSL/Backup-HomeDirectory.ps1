@@ -62,20 +62,21 @@ cd $HOME && for dir in * .*; do
   [ -d "$dir" ] && [ "$dir" != "." ] && [ "$dir" != ".." ] && echo "$dir|$(du -sh "$dir" 2>/dev/null | cut -f1)"
 done | sort
 '@
-    $dirOutput = Invoke-WslCommand -Distro $config.WslDistroName -Command $dirCommand -ErrorAction SilentlyContinue
+    # Invoke-WslCommand doesn't capture output, so call wsl directly
+    $dirOutput = wsl -d $config.WslDistroName -- bash -lc $dirCommand 2>$null
     
-    if ($null -ne $dirOutput) {
+    if ($null -ne $dirOutput -and $dirOutput.Count -gt 0) {
         $availableDirs = @($dirOutput | Where-Object { $_ -match '\|' })
     } else {
         Write-Host "⚠ Could not discover directories, using defaults" -ForegroundColor Yellow
         $availableDirs = @(
-            ".ssh|0",
-            ".bashrc|0",
-            ".config|0",
-            ".local|0",
-            "Documents|0",
-            "Pictures|0",
-            "Downloads|0"
+            ".ssh|4.0K",
+            ".bashrc|4.0K",
+            ".config|4.0K",
+            ".local|4.0K",
+            "Documents|4.0K",
+            "Pictures|4.0K",
+            "Downloads|4.0K"
         )
     }
 } catch {
