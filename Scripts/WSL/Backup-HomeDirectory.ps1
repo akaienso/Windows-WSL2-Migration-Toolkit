@@ -55,39 +55,13 @@ $existingSelections = if ($homeProfile -and $homeProfile.SelectedDirectories) { 
 # ===== DISCOVER AVAILABLE DIRECTORIES =====
 Write-Host "`n📁 Discovering home directories..." -ForegroundColor Yellow
 
-# Get list of common directories and their sizes via WSL
-$dirScript = @'
-#!/bin/bash
-# Get home directory structure with sizes
-for dir in * .*; do
-    if [ "$dir" = "." ] || [ "$dir" = ".." ]; then continue; fi
-    if [ -d "$dir" ]; then
-        size=$(du -sh "$dir" 2>/dev/null | cut -f1)
-        echo "$dir|$size"
-    fi
-done | sort
-'@
-
-# Save temp script
-$tempScript = Join-Path $env:TEMP "discover-dirs.sh"
-Set-Content -Path $tempScript -Value $dirScript -Encoding UTF8
-
 try {
-    $wslCmd = "bash -c 'cd `$HOME && $($dirScript -replace "`n", "; ")'"
-    $dirOutput = Invoke-WslCommand -Distro $config.WslDistroName -Command "bash << 'SCRIPT'
-cd `$HOME
-for dir in * .*; do
-    if [ `"`$dir`" = `".`" ] || [ `"`$dir`" = `"..`" ]; then continue; fi
-    if [ -d `"`$dir`" ]; then
-        size=`$(du -sh `"`$dir`" 2>/dev/null | cut -f1)
-        echo `"`$dir|`$size`"
-    fi
-done | sort
-SCRIPT
-" -ErrorAction SilentlyContinue
-
+    # Simple command to list directories with sizes
+    $dirCommand = "cd \$HOME && for dir in * .*; do [ -d \"\$dir\" ] && [ \"\$dir\" != \".\" ] && [ \"\$dir\" != \"..\" ] && echo \"\$dir|\$(du -sh \"\$dir\" 2>/dev/null | cut -f1)\"; done | sort"
+    $dirOutput = Invoke-WslCommand -Distro $config.WslDistroName -Command $dirCommand -ErrorAction SilentlyContinue
+    
     if ($null -ne $dirOutput) {
-        $availableDirs = $dirOutput -split "`n" | Where-Object { $_ -match '\|' }
+        $availableDirs = @($dirOutput | Where-Object { $_ -match '\|' })
     } else {
         Write-Host "⚠ Could not discover directories, using defaults" -ForegroundColor Yellow
         $availableDirs = @(
