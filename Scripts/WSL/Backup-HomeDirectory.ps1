@@ -118,10 +118,10 @@ $presets = @{
 
 $selected = $null
 Write-Host "Select a preset profile (or 'C' for custom):" -ForegroundColor Yellow
-Write-Host "  E) Essential - Config files only" -ForegroundColor White
-Write-Host "  S) Standard - Config + common directories" -ForegroundColor White
-Write-Host "  F) Full - Everything except caches" -ForegroundColor White
-Write-Host "  C) Custom - Select individual directories" -ForegroundColor White
+Write-Host "  E) Essential - Config files only (.ssh, .bashrc, .zshrc, .gitconfig)" -ForegroundColor White
+Write-Host "  S) Standard - Essential + common dirs (.config, .local, Documents, Pictures)" -ForegroundColor White
+Write-Host "  F) Full - Everything except caches/trash and cloud storage syncs" -ForegroundColor White
+Write-Host "  C) Custom - Select individual directories (can include cloud storage if needed)" -ForegroundColor White
 Write-Host "Choice [E/S/F/C]: " -ForegroundColor Cyan -NoNewline
 $profileChoice = Read-Host
 
@@ -137,9 +137,25 @@ switch -Regex ($profileChoice) {
         Write-Host "✓ Using Standard profile" -ForegroundColor Green
     }
     "^(F|Full)$" {
-        # Full = all except excluded
-        $selectedDirs = @($dirList.Name)
-        Write-Host "✓ Using Full profile (excluding caches)" -ForegroundColor Green
+        # Full = all except excluded patterns
+        $excludePatterns = @(".cache", ".local/share/trash", "snap", ".viminfo", "Dropbox", "OneDrive", "Google Drive", "GoogleDrive", "Box", ".dropbox-dist", ".dropbox", ".onedrive")
+        
+        # Filter out excluded directories
+        foreach ($dir in $dirList) {
+            $shouldExclude = $false
+            foreach ($pattern in $excludePatterns) {
+                if ($dir.Name -like "*$pattern*" -or $dir.Name -eq $pattern) {
+                    $shouldExclude = $true
+                    break
+                }
+            }
+            if (-not $shouldExclude) {
+                $selectedDirs += $dir.Name
+            }
+        }
+        
+        Write-Host "✓ Using Full profile (excluding caches, cloud storage, and trash)" -ForegroundColor Green
+        Write-Host "  Excluded: .cache, .local/share/trash, snap, Dropbox, OneDrive, Google Drive, Box, etc." -ForegroundColor DarkGray
     }
     "^(C|Custom)$" {
         Write-Host "`n=== CUSTOM SELECTION ===" -ForegroundColor Cyan

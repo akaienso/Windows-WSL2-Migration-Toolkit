@@ -36,9 +36,9 @@
         "Directories": [".ssh", ".bashrc", ".zshrc", ".profile", ".gitconfig", ".config", ".local", "Documents", "Pictures"]
       },
       "Full": {
-        "Description": "Everything except caches and trash",
+        "Description": "Everything except caches, trash, and cloud storage",
         "Directories": ["*"],
-        "ExcludePatterns": [".cache", ".local/share/trash", "snap/*", ".viminfo"]
+        "ExcludePatterns": [".cache", ".local/share/trash", "snap/*", ".viminfo", "Dropbox", "OneDrive", "Google Drive", "GoogleDrive", "Box", ".dropbox-dist", ".dropbox", ".onedrive"]
       }
     }
   }
