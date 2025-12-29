@@ -74,7 +74,7 @@ Set-Content -Path $tempScript -Value $dirScript -Encoding UTF8
 
 try {
     $wslCmd = "bash -c 'cd `$HOME && $($dirScript -replace "`n", "; ")'"
-    $dirOutput = Invoke-WslCommand -DistroName $config.WslDistroName -Command "bash << 'SCRIPT'
+    $dirOutput = Invoke-WslCommand -Distro $config.WslDistroName -Command "bash << 'SCRIPT'
 cd `$HOME
 for dir in * .*; do
     if [ `"`$dir`" = `".`" ] || [ `"`$dir`" = `"..`" ]; then continue; fi
@@ -234,7 +234,7 @@ echo `"Backup complete`"
 
 try {
     Write-Host "Running tar backup..." -ForegroundColor Cyan
-    Invoke-WslCommand -DistroName $config.WslDistroName -Command $tarCmd
+    Invoke-WslCommand -Distro $config.WslDistroName -Command $tarCmd
     
     if (Test-Path $backupArchive) {
         $archiveSize = Format-ByteSize -Bytes (Get-Item $backupArchive).Length

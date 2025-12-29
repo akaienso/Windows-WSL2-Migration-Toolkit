@@ -126,7 +126,7 @@ echo "Pre-restore backup complete"
 "@
 
 try {
-    Invoke-WslCommand -DistroName $config.WslDistroName -Command $backupCmd
+    Invoke-WslCommand -Distro $config.WslDistroName -Command $backupCmd
     
     if (Test-Path $preRestoreBackup) {
         Write-Host "✓ Pre-restore backup created: $(Split-Path -Leaf $preRestoreBackup)" -ForegroundColor Green
@@ -147,7 +147,7 @@ echo "Restore complete"
 "@
 
 try {
-    Invoke-WslCommand -DistroName $config.WslDistroName -Command $restoreCmd
+    Invoke-WslCommand -Distro $config.WslDistroName -Command $restoreCmd
     Write-Host "✓ Archive extracted successfully" -ForegroundColor Green
 } catch {
     Write-Error "Failed to extract archive: $_"
@@ -185,7 +185,7 @@ echo "Permission fixes complete"
 "@
 
 try {
-    Invoke-WslCommand -DistroName $config.WslDistroName -Command $permCmd
+    Invoke-WslCommand -Distro $config.WslDistroName -Command $permCmd
     Write-Host "✓ File permissions fixed" -ForegroundColor Green
 } catch {
     Write-Host "⚠ Warning: Could not fix all permissions: $_" -ForegroundColor Yellow
