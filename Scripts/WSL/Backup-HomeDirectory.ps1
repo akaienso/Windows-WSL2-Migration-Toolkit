@@ -57,7 +57,11 @@ Write-Host "`n📁 Discovering home directories..." -ForegroundColor Yellow
 
 try {
     # Simple command to list directories with sizes
-    $dirCommand = "cd \$HOME && for dir in * .*; do [ -d \"\$dir\" ] && [ \"\$dir\" != \".\" ] && [ \"\$dir\" != \"..\" ] && echo \"\$dir|\$(du -sh \"\$dir\" 2>/dev/null | cut -f1)\"; done | sort"
+    $dirCommand = @'
+cd $HOME && for dir in * .*; do 
+  [ -d "$dir" ] && [ "$dir" != "." ] && [ "$dir" != ".." ] && echo "$dir|$(du -sh "$dir" 2>/dev/null | cut -f1)"
+done | sort
+'@
     $dirOutput = Invoke-WslCommand -Distro $config.WslDistroName -Command $dirCommand -ErrorAction SilentlyContinue
     
     if ($null -ne $dirOutput) {
