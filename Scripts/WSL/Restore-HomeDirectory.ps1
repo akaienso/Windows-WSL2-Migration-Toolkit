@@ -26,7 +26,7 @@ $config = Load-Config -RootDirectory $RootDir
 }
 
 # Validate WSL distro
-if (-not (Test-WslDistro -DistroName $config.WslDistroName)) {
+if (-not (Test-WslDistro -Distro $config.WslDistroName)) {
     Write-Error "WSL distro not found: $($config.WslDistroName)"
     exit 1
 }
