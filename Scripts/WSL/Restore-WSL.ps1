@@ -66,6 +66,20 @@ if (-not (Test-Path $utilsPath)) {
 }
 . $utilsPath
 
+# ===== VERSION VALIDATION =====
+Write-Host "`n=== VERSION VALIDATION ===" -ForegroundColor Cyan
+Write-Host "Checking system requirements..." -ForegroundColor Yellow
+
+if (-not (Test-PowerShellVersion)) {
+    exit 1
+}
+
+if (-not (Test-WslVersion)) {
+    exit 1
+}
+
+Write-Host "✓ All version requirements met" -ForegroundColor Green
+
 $config = Load-Config -RootDirectory $RootDir
 
 # Validate required config fields
@@ -175,20 +189,43 @@ if ($DotBackup) {
     Write-Host "⚠ No dotfiles backup found (continuing without dotfiles)" -ForegroundColor Yellow
 }
 
-# 2. Import
+# 2. Unregister existing distro if it exists (always try, ignore error if doesn't exist)
+Write-Host "`nChecking for existing distro..." -ForegroundColor Yellow
+$distroExists = Test-WslDistro -Distro $Distro
+if ($distroExists) {
+    Write-Host "Unregistering existing distro: $Distro..." -ForegroundColor Yellow
+    & wsl.exe --unregister $Distro
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to unregister existing distro: $Distro. Make sure all WSL terminals are closed."
+        exit 1
+    }
+    Write-Host "✓ Existing distro unregistered" -ForegroundColor Green
+} else {
+    Write-Host "No existing distro found (proceeding with import)" -ForegroundColor DarkGray
+}
+
+# 3. Import
 Write-Host "`n1. Importing Distro (this may take a few minutes)..." -ForegroundColor Magenta
 if (-not (New-DirectoryIfNotExists -Path $InstallLocation)) {
     Write-Error "Failed to create install directory: $InstallLocation"
     exit 1
 }
 
-wsl --import $Distro $InstallLocation $FullBackup.FullName
+# Use wsl.exe explicitly with call operator for proper path handling
+$importArgs = @(
+    "--import",
+    $Distro,
+    $InstallLocation,
+    $FullBackup.FullName
+)
+
+& wsl.exe $importArgs
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "WSL import failed"
+    Write-Error "WSL import failed with exit code $LASTEXITCODE. Ensure WSL is properly installed and the backup file exists."
     exit 1
 }
 
-# 3. Inject Scripts
+# 4. Inject Scripts
 Write-Host "`n2. Starting WSL and injecting helper scripts..." -ForegroundColor Cyan
 $bootCmd = "echo 'WSL distro booted successfully'"
 if (-not (Invoke-WslCommand -Distro $Distro -Command $bootCmd -Quiet)) {
@@ -208,7 +245,7 @@ if (-not (Invoke-WslCommand -Distro $Distro -Command $deployCmd)) {
     exit 1
 }
 
-# 4. Restore Dotfiles
+# 5. Restore Dotfiles
 if ($DotBackup) {
     Write-Host "`n3. Restoring Dotfiles..." -ForegroundColor Cyan
     $wslBackupPath = ConvertTo-WslPath -WindowsPath $BackupDir.FullName
@@ -230,7 +267,7 @@ if ($DotBackup) {
     Write-Host "`n3. Skipping dotfiles (not available)" -ForegroundColor Yellow
 }
 
-# 5. Post Install
+# 6. Post Install
 Write-Host "`n4. Running Post-Install Setup..." -ForegroundColor Cyan
 $postCmd = "~/.wsl-toolkit/post-restore-install.sh"
 if (-not (Invoke-WslCommand -Distro $Distro -Command $postCmd)) {

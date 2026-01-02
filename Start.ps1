@@ -89,7 +89,8 @@ function Validate-BackupPath {
     
     # Validate the path doesn't have invalid characters
     $invalidChars = [System.IO.Path]::GetInvalidPathChars()
-    if ($backupPath -match "[$([regex]::Escape($invalidChars))]") {
+    $escapedChars = [regex]::Escape($invalidChars -join '')
+    if ($backupPath -match "[$escapedChars]") {
         Write-Host "✗ Invalid path - contains illegal characters: $backupPath" -ForegroundColor Red
         Write-Host "Using default location instead..." -ForegroundColor Yellow
         $backupPath = Join-Path (Split-Path -Parent $PSScriptRoot) "Windows-WSL2-Backup"
@@ -124,9 +125,8 @@ function Validate-BackupPath {
     
     # Store in global for later settings.json save
     $global:BackupRootTemp = $backupPath
-}
+}  # End Validate-BackupPath
 
-$currentConfig = Load-Config
 Validate-BackupPath ([ref]$currentConfig)
 
 # Save BackupRootDirectory to settings.json for persistence
@@ -193,7 +193,7 @@ function Validate-WslDistro {
             Write-Host "`nThis toolkit requires Windows Subsystem for Linux (WSL2) with at least one distro installed." -ForegroundColor Yellow
             Write-Host "`nTo use this toolkit:" -ForegroundColor Cyan
             Write-Host "  1. Install WSL2: https://docs.microsoft.com/en-us/windows/wsl/install" -ForegroundColor White
-            Write-Host "  2. Install a distro (Ubuntu, Debian, etc.)" -ForegroundColor White
+            Write-Host '  2. Install a distro (Ubuntu, Debian, etc)' -ForegroundColor White
             Write-Host "  3. Run this toolkit again" -ForegroundColor White
             Write-Host ""
             exit 1

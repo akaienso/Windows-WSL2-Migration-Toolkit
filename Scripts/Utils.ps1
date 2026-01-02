@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # SCRIPT: Utils.ps1
 # Purpose: Shared utility functions for all toolkit scripts
 # ==============================================================================
@@ -256,6 +256,54 @@ function Load-JsonFile {
     } catch {
         Write-Warning "Failed to load JSON file '$FilePath': $_. Starting fresh."
         return @{}
+    }
+}
+
+# ===== FUNCTION: Test PowerShell Version =====
+# Validates PowerShell version is 7.0 or later (required for WSL operations)
+function Test-PowerShellVersion {
+    $psVersion = $PSVersionTable.PSVersion
+    $major = $psVersion.Major
+    $minor = $psVersion.Minor
+    
+    if ($major -lt 7) {
+        Write-Error "PowerShell version $($psVersion.ToString()) is not supported. PowerShell 7.0 or later is required.`n`nTo update PowerShell:`n  winget upgrade --id Microsoft.PowerShell"
+        return $false
+    }
+    
+    return $true
+}
+
+# ===== FUNCTION: Test WSL Version =====
+# Validates WSL is installed and supports --import/--export (requires WSL2)
+function Test-WslVersion {
+    try {
+        # Check if wsl.exe exists
+        $wslPath = Get-Command wsl -ErrorAction SilentlyContinue
+        if (-not $wslPath) {
+            Write-Error "WSL is not installed or not in PATH.`n`nTo install WSL2:`n  wsl --install"
+            return $false
+        }
+        
+        # Try to get WSL status (works on WSL2)
+        $statusOutput = & wsl.exe --status 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "WSL status check failed. WSL may not be properly installed or updated.`n`nTo update WSL:`n  wsl --update`n  wsl --set-default-version 2"
+            return $false
+        }
+        
+        # Check if --import is available by testing help output
+        # Older WSL versions don't include --import in help
+        $helpOutput = & wsl.exe --help 2>&1 | Out-String
+        if ($helpOutput -notmatch '--import') {
+            Write-Error "WSL version does not support --import command (required for restore).`n`nWSL2 with latest update is required.`n`nTo update WSL:`n  wsl --update`n  wsl --set-default-version 2"
+            return $false
+        }
+        
+        return $true
+    } catch {
+        Write-Error "Failed to check WSL version: $_`n`nTo install/update WSL:`n  wsl --install`n  wsl --update"
+        return $false
     }
 }
 

@@ -15,6 +15,20 @@ if (-not (Test-Path $utilsPath)) {
 }
 . $utilsPath
 
+# ===== VERSION VALIDATION =====
+Write-Host "`n=== VERSION VALIDATION ===" -ForegroundColor Cyan
+Write-Host "Checking system requirements..." -ForegroundColor Yellow
+
+if (-not (Test-PowerShellVersion)) {
+    exit 1
+}
+
+if (-not (Test-WslVersion)) {
+    exit 1
+}
+
+Write-Host "✓ All version requirements met" -ForegroundColor Green
+
 $config = Load-Config -RootDirectory $RootDir
 
 # Validate required config fields
